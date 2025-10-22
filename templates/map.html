@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html>
+<head>
+  
+  <meta charset="utf-8" />
+  <title>Swath Map Viewer</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.pm@latest/dist/leaflet.pm.css" />
+  <style>
+    html, body { height: 100%; margin: 0; }
+    #map { height: 100%; width: 100%; }
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+    }
+
+    #legend {
+      position: absolute;
+      bottom: 10px;
+      left: 10px;
+      background: white;
+      padding: 8px;
+      border-radius: 6px;
+      font-size: 12px;
+      box-shadow: 0 0 4px rgba(0,0,0,0.3);
+      z-index: 1000;
+    }
+
+    .legend-item { margin: 4px 0; }
+
+    #backButton {
+      position: absolute;
+      top: 100px;
+      right: 10px;
+      background: white;
+      color: #2c3e50;
+      text-decoration: none;
+      padding: 6px 10px;
+      border-radius: 8px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+      font-weight: bold;
+      font-family: sans-serif;
+      z-index: 1001;
+    }
+
+    .polygon-label {
+      background: transparent;
+      border: none;
+      font-size: 12px;
+      font-weight: bold;
+      color: #2c3e50;
+      text-shadow: 1px 1px 2px white;
+      pointer-events: none;
+    }
+
+    .dropdown-menu {
+      position: absolute;
+      background: white;
+      border: 1px solid #ccc;
+      padding: 6px;
+      border-radius: 6px;
+      z-index: 1002;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+
+    .dropdown-menu button {
+      display: block;
+      width: 100%;
+      background: none;
+      border: none;
+      padding: 4px 8px;
+      text-align: left;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    .dropdown-menu button:hover {
+      background-color: #f0f0f0;
+    }
+
+    .leaflet-tooltip.line-label {
+        background: transparent;
+        border: none;
+        box-shadow: none;
+        font-size: 10px;          
+        color: #2c3e50;           
+        font-weight: 600;          
+        text-shadow: 1px 1px 2px white; 
+        padding: 0;                
+        pointer-events: none;      
+    }
+    @media print {
+      #legend {
+          display: block !important;
+          position: absolute;
+          bottom: 10px;
+          left: 10px;
+          z-index: 9999;
+          background: white;
+          padding: 5px;
+          border: 1px solid gray;
+          font-size: 12px;
+      }
+    }
+
+    @media print {
+      /* Hide back button, save view button, drawing tools, basemap switch, etc. */
+      #backButton,
+      #saveViewButton,
+      #exportScreenshotButton,
+      .leaflet-control-container,
+      .leaflet-control-layers {
+          display: none !important;
+      }
+    }
+  </style>
+</head>
+<body>
+<a href="/" id="backButton">⬅ Back</a>
+
+<button id="saveViewButton" style="
+    position: absolute;
+    top: 150px;
+    right: 10px;
+    z-index: 1001;
+    background: white;
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-weight: bold;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+">
+Save Current View
+</button>
+
+<div id="map"></div>
+<div id="legend">
+  <strong>LEGEND</strong>
+  {% for dtype, color in colors.items() %}
+    <div class="legend-item">
+      <span style="display:inline-block;width:12px;height:12px;background:{{ color }};margin-right:6px;"></span>
+      {{ dtype }}
+    </div>
+  {% endfor %}
+  <div class="legend-item">
+    <span style="display:inline-block;width:12px;height:2px;background:#e74c3c;margin-right:6px;border:1px dashed #e74c3c;"></span>
+    Swath Extent
+  </div>
+
+</div>
+
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.pm@latest/dist/leaflet.pm.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet.pm@latest/dist/leaflet.pm.css" />
+<script src="https://unpkg.com/leaflet.pm@latest/dist/leaflet.pm.min.js"></script>
+<script src="https://unpkg.com/leaflet.browser.print/dist/leaflet.browser.print.min.js"></script>
+
+<script>
+const map = L.map('map').setView(
+    [{{ map_view.lat }}, {{ map_view.lng }}],
+    {{ map_view.zoom }}
+);
+
+// === Base Maps ===
+
+const cartoWhite = L.tileLayer(
+  'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+  {
+    attribution: '&copy; <a href="https://carto.com/">CARTO</a>',
+    subdomains: 'abcd',
+    maxZoom: 19
+  }
+);
+
+const satelliteBase = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}');
+const topoBase = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png').addTo(map);
+
+L.control.layers({
+  
+  "Satellite": satelliteBase,
+  "Topo": topoBase,
+  "White": cartoWhite
+}).addTo(map);
+
+L.control.browserPrint({
+    title: 'Export Map',
+    printModes: ["Auto", "Portrait", "Landscape", "Custom"],
+    closePopupsOnPrint: false
+}).addTo(map);
+
+// Force it to only print the current view, not extra padding
+map.on("browser-print-start", function (event) {
+    event.printMap.fitBounds(map.getBounds());
+});
+
+document.getElementById("saveViewButton").addEventListener("click", () => {
+    const center = map.getCenter();
+    const zoom = map.getZoom();
+
+    fetch('/save_map_view', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            lat: center.lat,
+            lng: center.lng,
+            zoom: zoom
+        })
+    }).then(response => {
+        if (response.ok) {
+            alert('View saved successfully!');
+        }
+    });
+});
+
+
+
+const usedPolygonNames = new Set();
+
+// === Add Dropdown Menu on Right Click ===
+function showDropdownMenu(x, y, label, layer) {
+  const existingMenu = document.getElementById("polygon-menu");
+  if (existingMenu) existingMenu.remove();
+
+  const menu = document.createElement("div");
+  menu.id = "polygon-menu";
+  menu.className = "dropdown-menu";
+  menu.style.left = x + "px";
+  menu.style.top = y + "px";
+
+  const renameBtn = document.createElement("button");
+  renameBtn.innerText = "Rename";
+  renameBtn.onclick = () => {
+    const newLabel = prompt("New name:", label);
+    if (newLabel && !usedPolygonNames.has(newLabel)) {
+      fetch("/rename_polygon", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ old_label: label, new_label: newLabel })
+      }).then(() => location.reload());
+    } else {
+      alert("Name exists or is invalid.");
+    }
+  };
+
+  const deleteBtn = document.createElement("button");
+  deleteBtn.innerText = "Delete";
+  deleteBtn.onclick = () => {
+    if (confirm(`Delete "${label}"?`)) {
+      fetch(`/delete_polygon/${label}`, { method: "DELETE" }).then(() => location.reload());
+    }
+  };
+
+  const cancelBtn = document.createElement("button");
+  cancelBtn.innerText = "Cancel";
+  cancelBtn.onclick = () => menu.remove();
+
+  menu.appendChild(renameBtn);
+  menu.appendChild(deleteBtn);
+  menu.appendChild(cancelBtn);
+  document.body.appendChild(menu);
+}
+
+// === Label Polygons ===
+function labelPolygon(feature, layer) {
+  const label = feature.properties?.label;
+  if (label) {
+    layer.bindTooltip(label, {
+      permanent: true,
+      direction: 'center',
+      className: 'polygon-label'
+    });
+
+    layer.on("contextmenu", (e) => {
+      showDropdownMenu(e.originalEvent.clientX, e.originalEvent.clientY, label, layer);
+    });
+  }
+}
+
+// === Save Polygon on Create ===
+function savePolygon(layer) {
+  const coords = layer.getLatLngs()[0].map(pt => [pt.lng, pt.lat]);
+  let label = prompt("Enter a name for this polygon:", "Polygon 1");
+  if (!label || usedPolygonNames.has(label)) {
+    alert("❌ Invalid or duplicate name.");
+    return;
+  }
+  usedPolygonNames.add(label);
+
+  const geojson = {
+    type: "Feature",
+    geometry: { type: "Polygon", coordinates: [coords] },
+    properties: {
+      type: "custom_polygon",
+      label: label,
+      created_at: new Date().toISOString()
+    }
+  };
+
+  fetch("/save_polygon", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(geojson)
+  }).then(res => {
+    if (res.ok) {
+      L.geoJSON(geojson, { onEachFeature: labelPolygon }).addTo(map);
+    }
+  });
+}
+
+map.on("pm:create", e => savePolygon(e.layer));
+
+// === Load Existing Polygons ===
+fetch("/load_polygons")
+  .then(res => res.json())
+  .then(data => {
+    data.features.forEach(f => {
+      if (f.properties?.label) usedPolygonNames.add(f.properties.label);
+    });
+    L.geoJSON(data, {
+      onEachFeature: labelPolygon,
+      style: {
+        color: "#494745ff",
+        fillOpacity: 0.2,
+        weight: 2,
+        dashArray: "4,4"
+      }
+    }).addTo(map);
+  });
+
+// === Point Data ===
+const colorMap = {{ colors | tojson }};
+fetch('/geojson')
+  .then(response => response.json())
+  .then(data => {
+    const geoLayer = L.geoJSON(data, {
+      onEachFeature: (feature, layer) => {
+        const p = feature.properties;
+        layer.bindPopup(
+          `<strong>Swath:</strong> ${p.swath}<br>
+           <strong>Line:</strong> ${p.line}<br>
+           <strong>Shotpoint:</strong> ${p.shotpoint}<br>
+           <strong>Type:</strong> ${p.type}`
+        );
+            // 🔒 Disable edits for receiver lines
+        layer.pm?.disable?.();
+      },
+      pointToLayer: (feature, latlng) => {
+        const type = feature.properties.type;
+        const marker = L.circleMarker(latlng, {
+          radius: 3,
+          fillColor: colorMap[type] || '#999',
+          color: '#333',
+          weight: 1,
+          opacity: 0.6,
+          fillOpacity: 1
+        });
+
+            // I Disabled edits for circleMarkers here
+        marker.on('add', () => {
+        marker.pm?.disable?.();
+        });
+
+        return marker;
+      }
+    }).addTo(map);
+
+    if (geoLayer.getLayers().length > 0) {
+      map.fitBounds(geoLayer.getBounds(), { padding: [20, 20] });
+    }
+  });
+
+// === Line Data ===
+fetch('/geojson_lines')
+  .then(response => response.json())
+  .then(data => {
+    Object.entries(data.swaths).forEach(([swathName, geojson]) => {
+      L.geoJSON(geojson, {
+        style: feature => {
+          if (feature.geometry.type === "LineString" && feature.properties.type === "swath_edge") {
+            return { 
+              color: "#e74c3c", 
+              weight: 2, 
+              dashArray: "5,5"
+            };
+          }
+          return { color: "#1b6fc3ff", weight: 1 };
+        },
+        onEachFeature: (feature, layer) => {
+          const props = feature.properties;
+          if (feature.geometry.type === "LineString") {
+            const { line, first_shot, last_shot, type, extended_points } = props;
+            layer.bindTooltip(`Line ${line}<br>Shots ${first_shot}–${last_shot}`, { sticky: true });
+
+            let color = 'black';
+            if (type === 'R') color = 'blue';
+            if (type === 'S') color = 'red';
+
+            // Only show label if display_label is not empty
+            const displayLabel = feature.properties.display_label;
+            if (displayLabel && extended_points && extended_points.length >= 10) {
+              const [lon3, lat3] = extended_points[2];   // 3rd point
+              const [lon10, lat10] = extended_points[9]; // 10th point
+
+              // Correct longitude distortion by latitude
+              const latCorrection = Math.cos(lat3 * Math.PI / 180);
+              const dx = (lon10 - lon3) * latCorrection;
+              const dy = lat10 - lat3;
+              let angle = Math.atan2(dy, dx) * (260 / Math.PI);
+
+              
+
+              // Add vertical offset to the label position (move upward visually)
+              const verticalOffset = 0.002; // Small value ~10 meters up
+              const horizontalOffset = 0.0008
+              const labelLat = lat3 + verticalOffset;
+              const labelLon = lon3 + horizontalOffset;
+
+              L.marker([labelLat, labelLon], {
+                icon: L.divIcon({
+                  className: 'custom-line-label',
+                  html: `<div style="
+                    color: ${color};
+                    font-weight: bold;
+                    font-size: 11px;
+                    transform: rotate(${angle}deg);
+                    transform-origin: left center;
+                    text-shadow: 1px 1px 2px white;
+                    white-space: nowrap;
+                  ">${displayLabel}</div>`,
+                  iconSize: [60, 12],
+                  iconAnchor: [0, 6]
+                }),
+                interactive: false
+              }).addTo(map);
+            }
+
+            layer.pm?.disable?.();
+          }
+          
+          // Handle swath edge lines
+          if (feature.geometry.type === "LineString" && feature.properties.type === "swath_edge") {
+            const swathName = feature.properties.swath;
+            const edgeName = feature.properties.name || `Swath ${swathName}`;
+            layer.bindTooltip(edgeName, { sticky: true });
+            layer.pm?.disable?.();
+          }
+        }
+      }).addTo(map);
+    });
+  });
+
+// === Tooltip visibility control based on zoom level ===
+const minLabelZoom = 17;
+
+map.on('zoomend', () => {
+  const currentZoom = map.getZoom();
+  const tooltips = document.querySelectorAll('.leaflet-tooltip.line-label');
+  tooltips.forEach(tooltip => {
+    tooltip.style.display = currentZoom >= minLabelZoom ? 'block' : 'none';
+  });
+});
+
+// Remove any open dropdowns when clicking elsewhere
+map.on("click", () => {
+  const menu = document.getElementById("polygon-menu");
+  if (menu) menu.remove();
+});
+map.pm.addControls({
+  position: 'topleft',
+  drawPolygon: true,
+  editMode: true,
+  dragMode: true,
+  drawCircleMarker: false,
+  drawCircle: false,
+  rotateMode: true,
+  removalMode: true
+});
+map.pm.setGlobalOptions({
+  allowRotation: true,   // ✅ Allow rotation on polygons
+  layerGroup: null,      // Default group
+  snappable: true,
+  snapDistance: 20,
+  continueDrawing: false
+});
+
+
+
+</script>
+</body>
+</html>

@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Export Map Test</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.pm@latest/dist/leaflet.pm.css" />
+  <style>
+    html, body { height: 100%; margin: 0; }
+    #map { height: 100%; width: 100%; }
+  </style>
+</head>
+<body>
+
+<button id="exportMapBtn" style="
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 1001;
+    padding: 8px 14px;
+    background: #1b6fc3;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+">
+📤 Export A0 Map
+</button>
+
+<button id="selectExportAreaBtn" style="
+    position: absolute;
+    top: 50px;
+    right: 10px;
+    z-index: 1001;
+    padding: 8px 14px;
+    background: white;
+    border: 1px solid gray;
+    cursor: pointer;
+">
+📐 Select Export Area
+</button>
+
+<div id="map"></div>
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.pm@latest/dist/leaflet.pm.min.js"></script>
+
+<script>
+const map = L.map('map').setView([5.5, 7.0], 14);
+L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png').addTo(map);
+
+map.pm.addControls({
+    position: 'topleft',
+    drawRectangle: false,
+    editMode: false,
+    dragMode: false,
+    removalMode: false
+});
+
+map.pm.setGlobalOptions({
+    allowRotation: false,
+    snappable: true,
+    snapDistance: 20,
+    continueDrawing: false
+});
+
+// === Enable Rectangle Drawing for Export Selection ===
+document.getElementById('selectExportAreaBtn').addEventListener('click', () => {
+    map.pm.enableDraw('Rectangle', {
+        snappable: true,
+        allowSelfIntersection: false,
+        templineStyle: { color: 'red' },
+        hintlineStyle: { color: 'red', dashArray: [5, 5] },
+        pathOptions: { color: 'red', fillOpacity: 0 }
+    });
+});
+
+// === Save Bounds When Rectangle Is Drawn ===
+map.on('pm:create', e => {
+    if (e.shape === 'Rectangle' && e.layer.options.color === 'red') {
+        const bounds = e.layer.getBounds();
+        map.fitBounds(bounds);
+
+        fetch('/save_export_bounds', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                southWest: bounds.getSouthWest(),
+                northEast: bounds.getNorthEast()
+            })
+        }).then(() => {
+            alert('✅ Export area saved. You can now export.');
+        });
+    }
+});
+
+// === Trigger Export from Flask ===
+document.getElementById('exportMapBtn').addEventListener('click', () => {
+    fetch('/run_export')
+        .then(response => response.json())
+        .then(data => {
+            alert(data.status);
+            if (data.status.startsWith('✅')) {
+                window.open('/download_export', '_blank');
+            }
+        })
+        .catch(() => {
+            alert('❌ Export failed.');
+        });
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Swath Movers Matrix</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/handsontable@14.0.0/dist/handsontable.full.min.css">
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    #hot { margin-top: 20px; }
+    button { margin-top: 10px; padding: 8px 16px; font-size: 15px; }
+  </style>
+</head>
+<body>
+
+  <h2>Swath Movers Deployment Matrix</h2>
+  <div id="hot"></div>
+  <button onclick="saveData()">💾 Save</button>
+
+  <script src="https://cdn.jsdelivr.net/npm/handsontable@14.0.0/dist/handsontable.full.min.js"></script>
+  <script>
+    let hot, currentLines = [];
+
+    fetch('/data')
+      .then(res => res.json())
+      .then(({ data, lines, deployments }) => {
+        currentLines = lines;
+        const container = document.getElementById('hot');
+
+        const columns = [];
+        const headers = [];
+        lines.forEach(line => {
+          columns.push({ data: `${line}_shot`, readOnly: true });
+          columns.push({
+            data: `${line}_deploy`,
+            type: 'autocomplete',
+            source: deployments,
+            strict: false,
+            allowInvalid: true,
+            filter: true
+          });
+          headers.push(`${line}`, 'Deploy');
+        });
+
+        hot = new Handsontable(container, {
+          data,
+          colHeaders: headers,
+          columns,
+          rowHeaders: false,
+          stretchH: 'all',
+          contextMenu: true,
+          manualColumnResize: true,
+          licenseKey: 'non-commercial-and-evaluation',
+          fillHandle: {
+            direction: 'vertical',
+            autoInsertRow: false
+          }
+        });
+      });
+
+    function saveData() {
+      fetch('/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          data: hot.getSourceData(),
+          lines: currentLines
+        })
+      })
+      .then(res => res.json())
+      .then(resp => {
+        alert(resp.status === 'saved' ? '✅ Deployments saved!' : '❌ Save failed');
+      });
+    }
+  </script>
+
+</body>
+</html>

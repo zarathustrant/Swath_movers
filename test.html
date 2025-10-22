@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Leaflet Export Zoom Test</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- Leaflet CSS & JS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+  <!-- Leaflet.pm (for drawing) -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.pm@latest/dist/leaflet.pm.css" />
+  <script src="https://unpkg.com/leaflet.pm@latest/dist/leaflet.pm.min.js"></script>
+
+  <style>
+    html, body, #map {
+      height: 100%;
+      margin: 0;
+    }
+    #note {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: white;
+      padding: 8px;
+      font-size: 14px;
+      border-radius: 6px;
+      z-index: 1000;
+    }
+  </style>
+</head>
+<body>
+
+<div id="note">🟦 Draw a rectangle → map will zoom in → auto print after 2s</div>
+<div id="map"></div>
+
+<script>
+  const map = L.map('map').setView([6.5, 3.3], 7);
+
+  const topo = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+    maxZoom: 17,
+    attribution: 'Map data © OpenStreetMap contributors, SRTM | Style: OpenTopoMap'
+  }).addTo(map);
+
+  // Add drawing controls
+  map.pm.addControls({
+    position: 'topleft',
+    drawPolygon: false,
+    drawMarker: false,
+    drawPolyline: false,
+    drawCircle: false,
+    drawCircleMarker: false,
+    drawRectangle: true,
+    editMode: false,
+    dragMode: false,
+    removalMode: true
+  });
+
+  map.on('pm:create', e => {
+    const layer = e.layer;
+    const bounds = layer.getBounds();
+
+    // Zoom to drawn box
+    map.fitBounds(bounds);
+
+    // Optional: Add delay then print
+    setTimeout(() => {
+      window.print();  // You can replace this with screenshot/export logic
+    }, 2000);
+  });
+</script>
+
+</body>
+</html>
