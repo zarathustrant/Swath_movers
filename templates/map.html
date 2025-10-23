@@ -330,26 +330,31 @@ fetch("/load_polygons")
     }).addTo(map);
   });
 
-// === Point Data ===
+// === Point Data with Canvas Rendering ===
 const colorMap = {{ colors | tojson }};
+
+// Create a canvas renderer for better performance with many markers
+const canvasRenderer = L.canvas({ padding: 0.5, tolerance: 5 });
+
 fetch('/geojson')
   .then(response => response.json())
   .then(data => {
     const geoLayer = L.geoJSON(data, {
       onEachFeature: (feature, layer) => {
         const p = feature.properties;
+        // Using shortened property names (l=line, s=shotpoint, t=type)
         layer.bindPopup(
-          `<strong>Swath:</strong> ${p.swath}<br>
-           <strong>Line:</strong> ${p.line}<br>
-           <strong>Shotpoint:</strong> ${p.shotpoint}<br>
-           <strong>Type:</strong> ${p.type}`
+          `<strong>Line:</strong> ${p.l}<br>
+           <strong>Shotpoint:</strong> ${p.s}<br>
+           <strong>Type:</strong> ${p.t}`
         );
-            // 🔒 Disable edits for receiver lines
         layer.pm?.disable?.();
       },
       pointToLayer: (feature, latlng) => {
-        const type = feature.properties.type;
+        const type = feature.properties.t;  // Shortened property name
+        // Use canvas renderer for much better performance
         const marker = L.circleMarker(latlng, {
+          renderer: canvasRenderer,
           radius: 3,
           fillColor: colorMap[type] || '#999',
           color: '#333',
@@ -358,9 +363,8 @@ fetch('/geojson')
           fillOpacity: 1
         });
 
-            // I Disabled edits for circleMarkers here
         marker.on('add', () => {
-        marker.pm?.disable?.();
+          marker.pm?.disable?.();
         });
 
         return marker;
@@ -372,7 +376,10 @@ fetch('/geojson')
     }
   });
 
-// === Line Data ===
+// === Line Data with Canvas Rendering ===
+// Create separate canvas renderer for lines
+const lineRenderer = L.canvas({ padding: 0.5 });
+
 fetch('/geojson_lines')
   .then(response => response.json())
   .then(data => {
@@ -380,13 +387,18 @@ fetch('/geojson_lines')
       L.geoJSON(geojson, {
         style: feature => {
           if (feature.geometry.type === "LineString" && feature.properties.type === "swath_edge") {
-            return { 
-              color: "#e74c3c", 
-              weight: 2, 
+            return {
+              renderer: lineRenderer,
+              color: "#e74c3c",
+              weight: 2,
               dashArray: "5,5"
             };
           }
-          return { color: "#1b6fc3ff", weight: 1 };
+          return {
+            renderer: lineRenderer,
+            color: "#1b6fc3ff",
+            weight: 1
+          };
         },
         onEachFeature: (feature, layer) => {
           const props = feature.properties;
@@ -478,13 +490,24 @@ map.pm.addControls({
   rotateMode: true,
   removalMode: true
 });
-map.pm.setGlobalOptions({
-  allowRotation: true,   // ✅ Allow rotation on polygons
-  layerGroup: null,      // Default group
-  snappable: true,
-  snapDistance: 20,
-  continueDrawing: false
-});
+
+// Set global PM options using the correct method
+if (map.pm.setGlobalOptions) {
+  map.pm.setGlobalOptions({
+    allowRotation: true,
+    snappable: true,
+    snapDistance: 20,
+    continueDrawing: false
+  });
+} else if (map.pm.enableGlobalEditMode) {
+  // Alternative approach for older versions
+  map.pm.enableGlobalEditMode({
+    allowRotation: true,
+    snappable: true,
+    snapDistance: 20
+  });
+  map.pm.disableGlobalEditMode();
+}
 
 
 

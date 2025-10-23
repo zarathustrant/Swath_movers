@@ -103,16 +103,14 @@ select#swathSelect option:checked {
     right: 20px;
     width: 420px;
     max-height: 60vh;
-    overflow: hidden;
-    background: rgba(255, 255, 255, 0.95);
-    border: 1px solid #ccc;
-    border-radius: 12px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-    z-index: 1000;
-    font-size: 11px;
-    backdrop-filter: blur(6px);
-    resize: both;
     overflow: auto;
+    background: white;
+    border: 2px solid #2c3e50;
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+    z-index: 10000;
+    font-size: 11px;
+    resize: both;
     display: none;
 }
 
@@ -128,6 +126,27 @@ select#swathSelect option:checked {
 
 #statsContent {
     padding: 10px;
+    background: white;
+}
+
+#statsContent table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11px;
+}
+
+#statsContent th,
+#statsContent td {
+    border: 1px solid #ddd;
+    padding: 4px 6px;
+    text-align: center;
+}
+
+#statsContent th {
+    background: #2c3e50;
+    color: white;
+    position: static;
+    font-weight: 600;
 }
 
 #toast {

@@ -67,7 +67,7 @@ tar -czf /tmp/swath-movers-deploy.tar.gz \
     --exclude='backups' \
     --exclude='*.log' \
     --exclude='.DS_Store' \
-    --exclude='swath_movers.db' \
+    --exclude='*.db' \
     --exclude='vm_backups' \
     --exclude='swath-movers-deploy.tar.gz' \
     .
@@ -110,14 +110,17 @@ pkill -f "gunicorn.*swath-movers" || true
 sleep 2
 
 # Setup database backup
-echo "Setting up database backup..."
+echo "Setting up PostgreSQL database backup..."
 cat > ~/swath-movers/backup_db.sh << 'EOF'
 #!/bin/bash
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-DB_FILE="$SCRIPT_DIR/swath_movers.db"
 BACKUP_DIR="$SCRIPT_DIR/backups"
+DB_NAME="swath_movers"
+DB_USER="postgres"
+DB_HOST="localhost"
+DB_PORT="5432"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-BACKUP_FILE="$BACKUP_DIR/swath_movers_$TIMESTAMP.db"
+BACKUP_FILE="$BACKUP_DIR/swath_movers_$TIMESTAMP.sql"
 LOG_FILE="$SCRIPT_DIR/backup.log"
 
 mkdir -p "$BACKUP_DIR"
@@ -126,20 +129,23 @@ log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"
 }
 
-if [ ! -f "$DB_FILE" ]; then
-    log "ERROR: Database file not found at $DB_FILE"
+# Check if PostgreSQL is running
+if ! pg_isready -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" > /dev/null 2>&1; then
+    log "ERROR: PostgreSQL database is not accessible"
     exit 1
 fi
 
-log "Starting backup of swath_movers.db"
-cp "$DB_FILE" "$BACKUP_FILE"
+log "Starting backup of PostgreSQL database: $DB_NAME"
+
+# Create PostgreSQL backup using pg_dump
+pg_dump -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -f "$BACKUP_FILE" --no-owner --no-privileges --clean --if-exists
 
 if [ $? -eq 0 ]; then
     DB_SIZE=$(du -h "$BACKUP_FILE" | cut -f1)
     log "SUCCESS: Backup created at $BACKUP_FILE (Size: $DB_SIZE)"
-    find "$BACKUP_DIR" -name "swath_movers_*.db" -type f -mtime +30 -delete
+    find "$BACKUP_DIR" -name "swath_movers_*.sql" -type f -mtime +30 -delete
     log "Cleaned up backups older than 30 days"
-    BACKUP_COUNT=$(ls -1 "$BACKUP_DIR"/swath_movers_*.db 2>/dev/null | wc -l)
+    BACKUP_COUNT=$(ls -1 "$BACKUP_DIR"/swath_movers_*.sql 2>/dev/null | wc -l)
     log "Total backups: $BACKUP_COUNT"
 else
     log "ERROR: Backup failed"
@@ -193,7 +199,7 @@ echo ""
 log "Setting up local backup from VM..."
 cat > "$LOCAL_DIR/backup_from_vm.sh" << EOF
 #!/bin/bash
-# Pull database backup from discord-bot-vm to local
+# Pull PostgreSQL database backup from VM to local
 
 PROJECT="$PROJECT"
 ZONE="$ZONE"
@@ -203,16 +209,19 @@ TIMESTAMP=\$(date +%Y%m%d_%H%M%S)
 
 mkdir -p "\$LOCAL_BACKUP_DIR"
 
-echo "Pulling latest backup from VM..."
-gcloud compute scp --project=\$PROJECT --zone=\$ZONE \$VM_NAME:~/swath-movers/swath_movers.db "\$LOCAL_BACKUP_DIR/swath_movers_\$TIMESTAMP.db"
+echo "Pulling latest PostgreSQL backup from VM..."
+gcloud compute scp --project=\$PROJECT --zone=\$ZONE \$VM_NAME:~/swath-movers/backups/swath_movers_*.sql "\$LOCAL_BACKUP_DIR/" 2>/dev/null || echo "No backup files found on VM"
 
-if [ \$? -eq 0 ]; then
-    echo "✓ Backup saved to: \$LOCAL_BACKUP_DIR/swath_movers_\$TIMESTAMP.db"
+# Find the most recent backup file
+LATEST_BACKUP=\$(ls -t "\$LOCAL_BACKUP_DIR"/swath_movers_*.sql 2>/dev/null | head -1)
+
+if [ -n "\$LATEST_BACKUP" ]; then
+    echo "✓ Latest backup saved to: \$LATEST_BACKUP"
     # Keep only last 14 days locally
-    find "\$LOCAL_BACKUP_DIR" -name "swath_movers_*.db" -type f -mtime +14 -delete
+    find "\$LOCAL_BACKUP_DIR" -name "swath_movers_*.sql" -type f -mtime +14 -delete
     echo "✓ Cleaned up local backups older than 14 days"
 else
-    echo "✗ Backup failed"
+    echo "✗ No backup files found"
     exit 1
 fi
 EOF

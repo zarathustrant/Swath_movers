@@ -24,3 +24,4 @@ pymongo==4.15.3
 dnspython==2.8.0
 gunicorn==23.0.0
 flask-compress==1.15
+psycopg2-binary==2.9.11

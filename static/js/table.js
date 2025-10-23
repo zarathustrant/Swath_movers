@@ -11,6 +11,8 @@ let zoomLevel = 100;
 
 $(document).ready(function() {
     console.log('JavaScript loaded and ready');
+    console.log('jQuery version:', $.fn.jquery);
+    console.log('Stats popup exists:', $('#statsPopup').length > 0);
     loadTableData();
 });
 
@@ -227,9 +229,14 @@ function initializeEventHandlers() {
         startFill($(this)[0]);
     });
 
+    // Remove ALL existing event handlers before binding new ones
     $('#zoomIn').off('click').on('click', zoomIn);
     $('#zoomOut').off('click').on('click', zoomOut);
-    $('#toggleStats').off('click').on('click', toggleStats);
+    $('#toggleStats').off('click').on('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        toggleStats();
+    });
     $('#clearCache').off('click').on('click', clearLineCache);
     $('#swathSelect').off('change').on('change', function() {
         window.location.href = '/swath/' + $(this).val();
@@ -324,7 +331,25 @@ function zoomOut() {
 }
 
 function toggleStats() {
-    $('#statsPopup').toggle();
+    console.log('toggleStats() called');
+    const popup = $('#statsPopup');
+
+    // Stop any ongoing animations first
+    popup.stop(true, true);
+
+    console.log('Stats popup element:', popup.length, 'Current display:', popup.css('display'));
+
+    // Use explicit show/hide with animation for better visual feedback
+    if (popup.is(':visible')) {
+        console.log('Hiding stats popup');
+        popup.fadeOut(200);
+    } else {
+        console.log('Showing stats popup');
+        popup.fadeIn(200, function() {
+            // Scroll into view after animation completes
+            popup[0].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        });
+    }
 }
 
 function makeStatsDraggable() {
@@ -379,6 +404,7 @@ function showToast(message) {
 }
 
 function buildStats(data) {
+    console.log('buildStats() called with data:', data);
     const statsContent = $('#statsContent');
     statsContent.empty();
 
@@ -450,4 +476,5 @@ function buildStats(data) {
     statsTable.append(tbody);
     statsTable.append(tfoot);
     statsContent.append(statsTable);
+    console.log('buildStats() completed. Stats table rows:', statsTable.find('tr').length);
 }
