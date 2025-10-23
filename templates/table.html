@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+    <link rel="icon" href="{{ url_for('static', filename='favicon.png') }}" type="image/png">
+    <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.png') }}" type="image/png">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/table.css') }}">
+    <title>Swath Movers</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script>
+        // Debug: Log when scripts load
+        console.log('Template loaded, loading table.js...');
+    </script>
+    <script src="{{ url_for('static', filename='js/table.js') }}"></script>
+</head>
+<body>
+    <div id="loading" style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; font-family: 'Poppins', sans-serif;">
+        <div style="font-size: 18px; color: #333; margin-bottom: 20px;">Loading data...</div>
+        <div style="width: 300px; height: 6px; background: #e9ecef; border-radius: 3px; overflow: hidden;">
+            <div id="progressBar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #007bff, #0056b3); transition: width 0.3s ease;"></div>
+        </div>
+        <div style="font-size: 14px; color: #666; margin-top: 10px;">
+            <span id="progressText">0%</span>
+        </div>
+    </div>
+
+    <div id="toast">
+        Not saved — viewer mode only.
+    </div>
+    <div id="zoom-panel">
+        <label for="swathSelect">Swath:</label>
+        <select id="swathSelect" onchange="location.href='/swath/' + this.value">
+            <!-- Options will be populated by JavaScript -->
+        </select>
+
+        <span>Zoom:</span>
+        <button id="zoomOut" onclick="zoomOut()">−</button>
+        <span id="zoomDisplay">100%</span>
+        <button id="zoomIn" onclick="zoomIn()">+</button>
+        <button id="toggleStats" onclick="toggleStats()">📊 Stats</button>
+        <button id="clearCache" onclick="clearLineCache()">🔄 Regenerate Lines</button>
+        <button onclick="location.href='/map'">🗺 Map</button>
+        <button id="loginBtn" onclick="location.href='/login'">🔓 Login</button>
+        <button id="logoutBtn" onclick="location.href='/logout'" style="display: none;">🔒 Logout</button>
+    </div>
+
+    <table id="mainTable">
+        <thead>
+            <tr id="tableHeader">
+                <!-- Headers will be populated by JavaScript -->
+            </tr>
+        </thead>
+        <tbody id="tableBody">
+            <!-- Table rows will be populated by JavaScript -->
+        </tbody>
+    </table>
+
+    <div id="statsPopup">
+        <div id="statsHeader">📊 Stats <span style="float:right; cursor:pointer;" onclick="toggleStats()">✖</span></div>
+        <div id="statsContent">
+            <!-- Stats will be populated by JavaScript -->
+        </div>
+    </div>
+
+    <div id="mapOverlay">
+        <div id="mapFullscreen">
+            <div id="map"></div>
+        </div>
+    </div>
+
+    <script>
+        // Load data when page loads
+        $(document).ready(function() {
+            loadTableData();
+        });
+    </script>
+</body>
+</html>

@@ -1,4 +1,5 @@
-from flask import Flask, request, render_template_string, jsonify, redirect, url_for, render_template, send_from_directory,session, send_file
+from flask import Flask, request, render_template, jsonify, redirect, url_for, send_from_directory, session, send_file
+from flask_compress import Compress
 import pandas as pd
 import sqlite3
 import os
@@ -23,6 +24,9 @@ DB_FILE = os.path.join(PROJECT_DIR, "swath_movers.db")
 BASE_COORDS_CSV = os.path.join(PROJECT_DIR, "base.csv")
 app.secret_key = "f6e3a4b5e1c2d89a345e2a3c9bd0a5f4"
 os.makedirs(SWATH_FOLDER, exist_ok=True)
+
+# Enable compression
+Compress(app)
 
 DEPLOYMENT_TYPES = [
     "NODES DEPLOYED", "SM10 GEOPHONES DEPLOYED", "MARSH GEOPHONES DEPLOYED", "HYDROPHONES DEPLOYED",
@@ -168,16 +172,14 @@ def load_global_deployments():
         result = conn.execute("SELECT Line, Shotpoint, DeploymentType FROM global_deployments").fetchall()
     return {(row[0], row[1]): row[2] for row in result}
 
-@app.route("/swath/<swath>")
-def show_table(swath):
-    
-    # 🔑 Store this swath in session
-    session["last_swath"] = swath 
-    
+@app.route("/api/swath/<swath>")
+def api_swath_data(swath):
+    """API endpoint that returns JSON data for a swath"""
+
     csv_path = os.path.join(SWATH_FOLDER, f"{swath}.csv")
     if not os.path.exists(csv_path):
-        return f"Swath file {swath}.csv not found."
-    
+        return jsonify({"error": f"Swath file {swath}.csv not found."})
+
     swath_files = sorted(
         [f.split(".")[0] for f in os.listdir(SWATH_FOLDER) if f.endswith(".csv")]
     )
@@ -190,8 +192,73 @@ def show_table(swath):
 
     all_shotpoints = sorted(set(sp for points in line_data.values() for sp in points))
     line_numbers = sorted(line_data.keys())
-    
-       # 🔧 Load from GLOBAL deployments, not per-swath, for visual consistency
+
+    # 🔧 Load from GLOBAL deployments, not per-swath, for visual consistency
+    deployments = load_global_deployments()
+
+    table_data = []
+    for shot in all_shotpoints:
+        row = {}
+        for line in line_numbers:
+            if shot in line_data[line]:
+                key = (line, shot)
+                deploy = deployments.get(key, '')
+                row[line] = {
+                    'value': str(shot),
+                    'deploy': deploy,
+                    'color': DEPLOYMENT_COLORS.get(deploy, '#ffffff')
+                }
+            else:
+                row[line] = {'value': '', 'deploy': '', 'color': '#ffffff'}
+        table_data.append({'shot': shot, 'row': row})
+    table_data.sort(key=lambda x: x['shot'], reverse=True)
+
+    stats = {dtype: {line: 0 for line in line_numbers} for dtype in DEPLOYMENT_TYPES}
+    for (line, shot), dtype in deployments.items():
+        if dtype in stats and line in stats[dtype]:
+            stats[dtype][line] += 1
+
+    max_count = {
+        dtype: max(counts.values()) if counts else 1
+        for dtype, counts in stats.items()
+    }
+
+    return jsonify({
+        'swath': swath,
+        'swath_list': swath_files,
+        'stats': stats,
+        'table_data': table_data,
+        'max_count': max_count,
+        'line_numbers': line_numbers,
+        'deployment_types': DEPLOYMENT_TYPES,
+        'colors': DEPLOYMENT_COLORS,
+        'can_edit': session.get('can_edit', False)
+    })
+
+@app.route("/swath/<swath>")
+def show_table(swath):
+
+    # 🔑 Store this swath in session
+    session["last_swath"] = swath
+
+    csv_path = os.path.join(SWATH_FOLDER, f"{swath}.csv")
+    if not os.path.exists(csv_path):
+        return f"Swath file {swath}.csv not found."
+
+    swath_files = sorted(
+        [f.split(".")[0] for f in os.listdir(SWATH_FOLDER) if f.endswith(".csv")]
+    )
+
+    df = pd.read_csv(csv_path, header=None, names=['Line', 'FirstShot', 'LastShot'])
+    line_data = {}
+    for _, row in df.iterrows():
+        line = int(row['Line'])
+        line_data[line] = list(range(int(row['FirstShot']), int(row['LastShot']) + 1))
+
+    all_shotpoints = sorted(set(sp for points in line_data.values() for sp in points))
+    line_numbers = sorted(line_data.keys())
+
+    # 🔧 Load from GLOBAL deployments, not per-swath, for visual consistency
     deployments = load_global_deployments()
 
     table_data = []
@@ -225,7 +292,7 @@ def show_table(swath):
         for dtype, counts in stats.items()
     }
 
-    return render_template_string(TEMPLATE,
+    return render_template('table.html',
         swath=swath,
         swath_list=swath_files,
         stats=stats,
@@ -748,6 +815,7 @@ def load_users_from_csv(csv_file="users.csv", db_file="swath_movers.db"):
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
+    error = None
     if request.method == "POST":
         username = request.form.get("username", "")
         password = request.form.get("password", "")
@@ -757,16 +825,9 @@ def login():
                 session["can_edit"] = True
                 session["username"] = username
                 return redirect(request.args.get("next") or url_for("index"))
-        return render_template_string("<p>❌ Invalid credentials.</p><a href='/login'>Try again</a>")
+        error = "Invalid credentials."
 
-    return render_template_string('''
-        <form method="post" style="max-width:300px;margin:auto;padding:40px;font-family:sans-serif;">
-            <h3>Login</h3>
-            <input type="text" name="username" placeholder="Username" required style="width:100%;padding:10px;margin-bottom:10px;">
-            <input type="password" name="password" placeholder="Password" required style="width:100%;padding:10px;margin-bottom:10px;">
-            <button type="submit" style="padding:10px;width:100%;background:#2c3e50;color:white;border:none;">Login</button>
-        </form>
-    ''')
+    return render_template('login.html', error=error)
     
 @app.route("/logout")
 def logout():
@@ -777,347 +838,8 @@ def logout():
     
 
 
-TEMPLATE = '''
-<!DOCTYPE html>
-<html>
-<head>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
-    <link rel="icon" href="{{ url_for('static', filename='favicon.png') }}" type="image/png">
-    <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.png') }}" type="image/png">
-    <title>Swath Movers</title>
-    <style>
-        body { font-family: Poppins, sans-serif; padding-top: 50px; }
-        table { border-collapse: collapse; width: 100%; font-size: 12px; }
-        th, td { border: 1px solid #ccc; padding: 4px; text-align: center; }
-        th { background: #2c3e50; color: white; position: sticky; top: 50px; z-index: 10; }
-        select {
-            appearance: none; border: 1px solid #ccc; padding: 3px; font-size: 12px;
-            -webkit-appearance: none; -moz-appearance: none;
-        }
-        .select-wrapper { position: relative; }
-        .fill-handle {
-            position: absolute; right: -3px; bottom: 2px;
-            width: 6px; height: 6px; background: #3498db;
-            border-radius: 2px; cursor: crosshair; display: none;
-        }
-        .select-wrapper:hover .fill-handle { display: block; }
-        .shot-cell { font-weight: bold; }
-        #zoom-panel {
-            position: fixed; top: 0; left: 0; right: 0;
-            background: white; padding: 8px; z-index: 999;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            display: flex; align-items: center; gap: 10px;
-        }
-        #zoom-panel button { padding: 3px 8px; font-size: 14px; }
-        
-        ::selection {
-            background: transparent;
-            color: inherit;
-        }
-        
-        label[for="swathSelect"] {
-            font-weight: 600;
-            color: black;
-        }
 
-        select#swathSelect option:checked {
-            color: blue;
-            font-weight: bold;
-        }
-        #statsPopup {
-            position: fixed;
-            top: 70px;
-            right: 20px;
-            width: 420px;
-            max-height: 60vh;
-            overflow: hidden;
-            background: rgba(255, 255, 255, 0.95);
-            border: 1px solid #ccc;
-            border-radius: 12px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-            z-index: 1000;
-            font-size: 11px;
-            backdrop-filter: blur(6px);
-            resize: both;
-            overflow: auto;
-        }
-
-        #statsHeader {
-            background: #2c3e50;
-            color: white;
-            padding: 8px;
-            font-weight: bold;
-            cursor: move;
-            border-top-left-radius: 12px;
-            border-top-right-radius: 12px;
-        }
-
-        #statsContent {
-            padding: 10px;
-        }
-
-    </style>
-    <script>
-        const deploymentColors = {{ colors | tojson }};
-        const canEdit = {{ 'true' if session.get('can_edit') else 'false' }};
-        let dragging = false, startSelect = null;
-
-        function showToast(message) {
-            const toast = document.getElementById("toast");
-            toast.innerText = message;
-            toast.style.display = "block";
-            setTimeout(() => { toast.style.display = "none"; }, 3000);
-        }
-
-        function updateDeployment(select, line, shot) {
-            const color = deploymentColors[select.value] || '#ffffff';
-            const cell = document.getElementById(`cell-${line}-${shot}`);
-            if (cell) cell.style.backgroundColor = color;
-
-            if (!canEdit) {
-                showToast("🔒 Not saved — viewer mode only.");
-                return;
-            }
-
-            fetch('/save/{{ swath }}', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ line: line, shotpoint: shot, deployment: select.value })
-            });
-        }
-
-        function startFill(handle) {
-            dragging = true;
-            startSelect = handle.previousElementSibling;
-            document.body.classList.add("dragging");
-            document.addEventListener('mouseup', stopFill);
-            document.addEventListener('mousemove', performFill);
-        }
-
-        function stopFill() {
-            dragging = false;
-            startSelect = null;
-            document.body.classList.remove("dragging");
-            document.removeEventListener('mouseup', stopFill);
-            document.removeEventListener('mousemove', performFill);
-        }
-
-        function performFill(e) {
-            if (!dragging || !startSelect) return;
-            const y = e.clientY;
-            const allSelects = document.querySelectorAll(`select[data-line="${startSelect.dataset.line}"]`);
-            let startIndex = Array.from(allSelects).findIndex(sel => sel.dataset.shot === startSelect.dataset.shot);
-            for (let i = startIndex + 1; i < allSelects.length; i++) {
-                const sel = allSelects[i];
-                const rect = sel.getBoundingClientRect();
-                if (y >= rect.top && y <= rect.bottom) {
-                    sel.value = startSelect.value;
-                    const line = parseInt(sel.dataset.line);
-                    const shot = parseInt(sel.dataset.shot);
-                    const color = deploymentColors[sel.value] || '#ffffff';
-                    const cell = document.getElementById(`cell-${line}-${shot}`);
-                    if (cell) cell.style.backgroundColor = color;
-                    updateDeployment(sel, line, shot);
-                }
-            }
-        }
-
-        let zoomLevel = 100;
-        function applyZoom() {
-            document.body.style.zoom = zoomLevel + '%';
-            document.getElementById('zoomDisplay').innerText = zoomLevel + '%';
-        }
-        function zoomIn() { if (zoomLevel < 200) { zoomLevel += 10; applyZoom(); } }
-        function zoomOut() { if (zoomLevel > 50) { zoomLevel -= 10; applyZoom(); } }
-
-        function toggleStats() {
-            const statsBox = document.getElementById("statsPopup");
-            statsBox.style.display = (statsBox.style.display === "none") ? "block" : "none";
-        }
-
-        function clearLineCache() {
-            if (confirm("Clear line cache and regenerate all map lines from scratch?")) {
-                fetch('/clear_line_cache', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'}
-                })
-                .then(response => response.json())
-                .then(data => {
-                    showToast("✅ " + data.message);
-                })
-                .catch(error => {
-                    showToast("❌ Error clearing cache");
-                });
-            }
-        }
-
-        // === Make statsPopup draggable ===
-        const popup = document.getElementById("statsPopup");
-        const header = document.getElementById("statsHeader");
-        let offsetX = 0, offsetY = 0, isDragging = false;
-
-        header.onmousedown = (e) => {
-            isDragging = true;
-            offsetX = e.clientX - popup.offsetLeft;
-            offsetY = e.clientY - popup.offsetTop;
-            document.onmousemove = drag;
-            document.onmouseup = () => { isDragging = false; document.onmousemove = null; };
-        };
-
-        function drag(e) {
-            if (!isDragging) return;
-            popup.style.top = (e.clientY - offsetY) + "px";
-            popup.style.left = (e.clientX - offsetX) + "px";
-            popup.style.right = "auto";  // disable fixed right when moving
-        }
-    </script>
-</head>
-<body>
-    <div id="toast" style="
-        position: fixed;
-        bottom: 20px;
-        right: 20px;
-        background: rgba(0, 0, 0, 0.85);
-        color: white;
-        padding: 10px 16px;
-        border-radius: 6px;
-        font-size: 13px;
-        font-family: Poppins, sans-serif;
-        display: none;
-        z-index: 9999;
-        box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-    ">
-        Not saved — viewer mode only.
-    </div>
-    <div id="zoom-panel">
-        
-        
-        <label for="swathSelect" style="font-weight: bold; color: black; font-family: 'Poppins', sans-serif;">Swath:</label>
-        <select id="swathSelect" onchange="location.href='/swath/' + this.value"
-                style="font-family: 'Poppins', sans-serif; font-weight: bold; color: red;">
-            {% for s in swath_list %}
-                <option value="{{ s }}" {% if s == swath %}selected{% endif %}>{{ s }}</option>
-            {% endfor %}
-        </select>
-        
-        <span>Zoom:</span>
-        <button onclick="zoomOut()">−</button>
-        <span id="zoomDisplay">100%</span>
-        <button onclick="zoomIn()">+</button>
-        <button onclick="toggleStats()">📊 Stats</button>
-        <button onclick="clearLineCache()">🔄 Regenerate Lines</button>
-        <button onclick="location.href='/map'">🗺 Map</button>
-        {% if session.get('can_edit') %}
-            <button onclick="location.href='/logout'">🔒 Logout</button>
-        {% else %}
-            <button onclick="location.href='/login'">🔓 Login</button>
-        {% endif %}
-
-    </div>
-    <table>
-        <thead>
-            <tr>{% for line in line_numbers %}<th>{{ line }}</th><th>Deployment/Retrieval</th>{% endfor %}</tr>
-        </thead>
-        <tbody>
-            {% for entry in table_data %}
-                <tr>
-                {% for line in line_numbers %}
-                    {% if entry.row[line].value %}
-                        <td id="cell-{{ line }}-{{ entry.shot }}" class="shot-cell" style="background-color: {{ entry.row[line].color }}">{{ entry.row[line].value }}</td>
-                        <td>
-                            <div class="select-wrapper">
-                                <select onchange="updateDeployment(this, {{ line }}, {{ entry.shot }})" data-line="{{ line }}" data-shot="{{ entry.shot }}">
-                                    <option value="">--</option>
-                                    {% for option in deployment_types %}
-                                        <option value="{{ option }}" {% if entry.row[line].deploy == option %}selected{% endif %}>{{ option }}</option>
-                                    {% endfor %}
-                                </select>
-                                <div class="fill-handle" onmousedown="startFill(this)"></div>
-                            </div>
-                        </td>
-                    {% else %}
-                        <td></td><td></td>
-                    {% endif %}
-                {% endfor %}
-                </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-    
-    <div id="statsPopup" style="display:none;">
-        <div id="statsHeader">📊 Stats <span style="float:right; cursor:pointer;" onclick="toggleStats()">✖</span></div>
-        <div id="statsContent">
-            <table>
-                <thead>
-                    <tr>
-                        <th>Deployment/Retrieval Type</th>
-                        {% for line in line_numbers %}
-                            <th>{{ line }}</th>
-                        {% endfor %}
-                        <th style="background:#333;">Total</th> <!-- Row total -->
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for dtype in deployment_types %}
-                    <tr>
-                        <td><strong>{{ dtype }}</strong></td>
-                        {% set ns = namespace(row_total=0) %}
-                        {% for line in line_numbers %}
-                            {% set count = stats[dtype][line] %}
-                            {% set ns.row_total = ns.row_total + count %}
-                            {% set maxc = max_count[dtype] %}
-                            {% set intensity = 255 - (count / maxc * 180) if maxc > 0 else 255 %}
-                            {% set base = colors.get(dtype, "#ffffff") %}
-                            {% set r = base[1:3] | int(base=16) %}
-                            {% set g = base[3:5] | int(base=16) %}
-                            {% set b = base[5:7] | int(base=16) %}
-                            {% set rr = (r * (intensity / 255)) | round(0, 'floor') %}
-                            {% set gg = (g * (intensity / 255)) | round(0, 'floor') %}
-                            {% set bb = (b * (intensity / 255)) | round(0, 'floor') %}
-                            {% set brightness = (rr * 0.299 + gg * 0.587 + bb * 0.114) %}
-                            {% set text_color = 'white' if brightness < 128 else 'black' %}
-                            <td style="background-color: rgb({{ rr }}, {{ gg }}, {{ bb }}); color: {{ text_color }};">
-                                {{ count }}
-                            </td>
-                        {% endfor %}
-                        <td style="background:#eee; font-weight:bold;">{{ ns.row_total }}</td> <!-- Row total cell -->
-                    </tr>
-                    {% endfor %}
-                </tbody>
-                <tfoot>
-                    <tr>
-                        <th>Total</th>
-                        {% set grand = namespace(total=0) %}
-                        {% for line in line_numbers %}
-                            {% set col = namespace(total=0) %}
-                            {% for dt in deployment_types %}
-                                {% if stats[dt][line] is defined %}
-                                    {% set col.total = col.total + stats[dt][line] %}
-                                {% endif %}
-                            {% endfor %}
-                            {% set grand.total = grand.total + col.total %}
-                            <th style="background:#eee; color:black; font-weight:bold;">{{ col.total }}</th>
-                        {% endfor %}
-                        <th style="background:#333; color:white; font-weight:bold;">{{ grand.total }}</th>
-                    </tr>
-                </tfoot>
-            </table>
-        </div>
-    </div>
-    <div id="mapOverlay">
-        <div id="mapFullscreen">
-            <div id="map"></div>
-        </div>
-    </div>
-    
-    
-</body>
-</html>
-'''
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080)
 
 run_migrations_once()
-
-
-
