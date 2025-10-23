@@ -355,7 +355,7 @@ fetch('/geojson')
         // Use canvas renderer for much better performance
         const marker = L.circleMarker(latlng, {
           renderer: canvasRenderer,
-          radius: 3,
+          radius: 2,
           fillColor: colorMap[type] || '#999',
           color: '#333',
           weight: 1,
