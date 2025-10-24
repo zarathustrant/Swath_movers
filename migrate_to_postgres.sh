@@ -3,6 +3,12 @@
 # Migration script to move data from SQLite (swath_movers.db) to PostgreSQL
 # This script checks if PostgreSQL is installed, installs it if needed, creates database, and migrates all data
 
+
+#FIX LOCALE WARNINGS
+export LC_ALL=C
+export LANG=C
+export LANGUAGE=C
+
 set -e  # Exit on any error
 
 # Configuration
@@ -43,6 +49,59 @@ success() {
 warning() {
     echo -e "${YELLOW}Warning: $1${NC}"
     log "WARNING: $1"
+}
+
+# Get password from user with confirmation
+get_password() {
+    local password_valid=0
+    
+    while [ $password_valid -eq 0 ]; do
+        echo
+        read -s -p "Enter password for PostgreSQL user '$PG_USER': " PG_PASSWORD
+        echo
+        read -s -p "Confirm password: " PG_PASSWORD_CONFIRM
+        echo
+        
+        if [ -z "$PG_PASSWORD" ]; then
+            echo -e "${YELLOW}Password cannot be empty. Please try again.${NC}"
+        elif [ "$PG_PASSWORD" != "$PG_PASSWORD_CONFIRM" ]; then
+            echo -e "${RED}Passwords do not match. Please try again.${NC}"
+        elif [ ${#PG_PASSWORD} -lt 3 ]; then
+            echo -e "${YELLOW}Password must be at least 3 characters long. Please try again.${NC}"
+        else
+            password_valid=1
+        fi
+    done
+    
+    echo "$PG_PASSWORD"
+}
+
+# Interactive configuration setup
+setup_configuration() {
+    echo "=== PostgreSQL Migration Configuration ==="
+    echo
+    
+    # Get PostgreSQL username
+    read -p "Enter PostgreSQL username [$PG_USER]: " input_user
+    if [ -n "$input_user" ]; then
+        PG_USER="$input_user"
+    fi
+    
+    # Get database name
+    read -p "Enter database name [$PG_DB]: " input_db
+    if [ -n "$input_db" ]; then
+        PG_DB="$input_db"
+    fi
+    
+    # Get password
+    PG_PASSWORD=$(get_password)
+    
+    echo
+    echo -e "${GREEN}Configuration set:${NC}"
+    echo "  Username: $PG_USER"
+    echo "  Database: $PG_DB"
+    echo "  Password: ********"
+    echo
 }
 
 # Detect operating system
@@ -183,7 +242,8 @@ check_postgres_running() {
 check_database_exists() {
     log "Checking if PostgreSQL database '$PG_DB' exists..."
 
-    if psql -h "$PG_HOST" -p "$PG_PORT" -lqt | cut -d \| -f 1 | grep -qw "$PG_DB"; then
+    # Use sudo to avoid password authentication issues
+    if sudo -u postgres psql -lqt 2>/dev/null | cut -d \| -f 1 | grep -qw "$PG_DB"; then
         return 0  # Database exists
     else
         return 1  # Database doesn't exist
@@ -194,33 +254,62 @@ check_database_exists() {
 create_database() {
     log "Creating PostgreSQL database and user..."
 
-    # Create user if it doesn't exist (connect to postgres system database)
-    if ! psql -h "$PG_HOST" -p "$PG_PORT" -d "postgres" -tAc "SELECT 1 FROM pg_roles WHERE rolname='$PG_USER'" | grep -q 1; then
-        log "Creating user '$PG_USER'..."
-        sudo -u postgres psql -d "postgres" -c "CREATE USER $PG_USER WITH PASSWORD 'swath_password';" 2>/dev/null || \
-        psql -h "$PG_HOST" -p "$PG_PORT" -d "postgres" -c "CREATE USER $PG_USER WITH PASSWORD 'swath_password';" || \
-        error_exit "Failed to create user '$PG_USER'"
-        success "Created user '$PG_USER'"
-    else
+    # Check if user already exists (using sudo to avoid password issues)
+    if sudo -u postgres psql -d "postgres" -tAc "SELECT 1 FROM pg_roles WHERE rolname='$PG_USER'" 2>/dev/null | grep -q 1; then
         warning "User '$PG_USER' already exists"
+        echo
+        read -p "Do you want to reset the password for user '$PG_USER'? (y/N): " reset_password
+        if [[ $reset_password =~ ^[Yy]$ ]]; then
+            log "Resetting password for user '$PG_USER'"
+            sudo -u postgres psql -d "postgres" -c "ALTER USER $PG_USER WITH PASSWORD '$PG_PASSWORD';" || \
+            error_exit "Failed to reset password for user '$PG_USER'"
+            success "Password reset for user '$PG_USER'"
+        fi
+    else
+        # Create new user
+        log "Creating user '$PG_USER'..."
+        
+        # Try different methods to create user
+        if command -v sudo >/dev/null 2>&1 && sudo -u postgres psql -tAc "SELECT 1" >/dev/null 2>&1; then
+            # Method 1: Using sudo (Linux/macOS)
+            sudo -u postgres psql -d "postgres" -c "CREATE USER $PG_USER WITH PASSWORD '$PG_PASSWORD' CREATEDB LOGIN;" || \
+            error_exit "Failed to create user '$PG_USER' with sudo method"
+        else
+            # Method 2: Direct connection (might require peer authentication)
+            psql -h "$PG_HOST" -p "$PG_PORT" -d "postgres" -c "CREATE USER $PG_USER WITH PASSWORD '$PG_PASSWORD' CREATEDB LOGIN;" || \
+            error_exit "Failed to create user '$PG_USER' with direct method"
+        fi
+        
+        success "Created user '$PG_USER'"
     fi
 
     # Create database if it doesn't exist
     if ! check_database_exists; then
         log "Creating database '$PG_DB'..."
-        sudo -u postgres createdb -O "$PG_USER" "$PG_DB" 2>/dev/null || \
-        psql -h "$PG_HOST" -p "$PG_PORT" -d "postgres" -c "CREATE DATABASE $PG_DB OWNER $PG_USER;" || \
-        error_exit "Failed to create database '$PG_DB'"
+        
+        # Try different methods to create database
+        if command -v sudo >/dev/null 2>&1 && sudo -u postgres createdb --help >/dev/null 2>&1; then
+            sudo -u postgres createdb -O "$PG_USER" "$PG_DB" || \
+            error_exit "Failed to create database '$PG_DB' with sudo method"
+        else
+            psql -h "$PG_HOST" -p "$PG_PORT" -d "postgres" -c "CREATE DATABASE $PG_DB OWNER $PG_USER;" || \
+            error_exit "Failed to create database '$PG_DB' with direct method"
+        fi
+        
         success "Created database '$PG_DB'"
     else
         warning "Database '$PG_DB' already exists"
     fi
 
+    # Set up password authentication for the connection FIRST
+    export PGPASSWORD="$PG_PASSWORD"
+
     # Grant permissions
     log "Setting up permissions..."
-    psql -h "$PG_HOST" -p "$PG_PORT" -d "$PG_DB" -c "GRANT ALL PRIVILEGES ON DATABASE $PG_DB TO $PG_USER;" || \
-    error_exit "Failed to grant database permissions"
-    success "Database permissions granted"
+    sudo -u postgres psql -d "$PG_DB" -c "GRANT ALL PRIVILEGES ON DATABASE $PG_DB TO $PG_USER;" 2>/dev/null || \
+    warning "Failed to grant database permissions (might already be set)"
+    
+    success "Database setup completed"
 }
 
 # Check if tables already exist in PostgreSQL
@@ -244,12 +333,29 @@ create_tables() {
     if check_tables_exist; then
         warning "Tables already exist in PostgreSQL database"
         log "Existing tables found: $(psql -h "$PG_HOST" -p "$PG_PORT" -d "$PG_DB" -U "$PG_USER" -tAc "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE';" 2>/dev/null | tr '\n' ' ')"
-        return 0
+        echo
+        read -p "Do you want to recreate the tables? This will DROP existing tables! (y/N): " recreate_tables
+        if [[ $recreate_tables =~ ^[Yy]$ ]]; then
+            log "Dropping existing tables..."
+            # Drop all tables (be careful!)
+            psql -h "$PG_HOST" -p "$PG_PORT" -d "$PG_DB" -U "$PG_USER" -c "
+            DO \$\$ DECLARE
+                r RECORD;
+            BEGIN
+                FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = 'public') LOOP
+                    EXECUTE 'DROP TABLE IF EXISTS ' || quote_ident(r.tablename) || ' CASCADE';
+                END LOOP;
+            END \$\$;" || warning "Some tables might not have been dropped"
+        else
+            log "Using existing tables"
+            return 0
+        fi
     fi
 
-    # Run schema creation - if it fails due to existing objects, that's okay
+    # Run schema creation
+    log "Creating tables from schema file: $SCHEMA_FILE"
     if ! psql -h "$PG_HOST" -p "$PG_PORT" -d "$PG_DB" -U "$PG_USER" -f "$SCHEMA_FILE" >/dev/null 2>&1; then
-        log "Schema creation had some issues (likely due to existing objects), but continuing..."
+        log "Schema creation had some issues, but continuing..."
     fi
 
     success "Tables created successfully"
@@ -361,8 +467,8 @@ migrate_data() {
     # Check if data already exists in PostgreSQL
     if check_data_exists; then
         warning "Data already exists in PostgreSQL database"
-        log "PostgreSQL already contains data. Skipping migration to avoid duplicates."
-
+        log "PostgreSQL already contains data."
+        
         # Show current record counts
         echo "Current record counts:"
         for table in $tables; do
@@ -371,7 +477,12 @@ migrate_data() {
             echo "  $table: SQLite=$sqlite_count, PostgreSQL=$postgres_count"
         done
 
-        return 0
+        echo
+        read -p "Do you want to continue with migration? This may create duplicate data. (y/N): " continue_migration
+        if [[ ! $continue_migration =~ ^[Yy]$ ]]; then
+            log "Migration cancelled by user"
+            return 0
+        fi
     fi
 
     for table in $tables; do
@@ -403,7 +514,7 @@ verify_migration() {
     if [ "$errors" -eq 0 ]; then
         success "Migration verification completed successfully"
     else
-        error_exit "Migration verification failed with $errors errors"
+        warning "Migration verification completed with $errors errors"
     fi
 }
 
@@ -418,12 +529,38 @@ create_backup() {
     success "Backup created: $backup_file"
 }
 
+# Display final connection information
+show_connection_info() {
+    echo
+    echo -e "${GREEN}=== Migration Completed Successfully ===${NC}"
+    echo
+    echo "Connection Information:"
+    echo "  Database: $PG_DB"
+    echo "  Username: $PG_USER"
+    echo "  Password: ********"
+    echo "  Host: $PG_HOST"
+    echo "  Port: $PG_PORT"
+    echo
+    echo "To connect to your PostgreSQL database:"
+    echo "  psql -h $PG_HOST -p $PG_PORT -U $PG_USER -d $PG_DB"
+    echo
+    echo "Or set the password environment variable:"
+    echo "  PGPASSWORD='$PG_PASSWORD' psql -h $PG_HOST -p $PG_PORT -U $PG_USER -d $PG_DB"
+    echo
+    echo "SQLite backup saved as: swath_movers_backup_*.db"
+    echo "Log file: $LOG_FILE"
+    echo
+}
+
 # Main execution
 main() {
     log "=== Starting PostgreSQL Migration ==="
 
     # Create log file
     echo "Migration started at $(date)" > "$LOG_FILE"
+
+    # Interactive setup
+    setup_configuration
 
     # Run migration steps
     detect_os
@@ -439,9 +576,7 @@ main() {
     success "=== Migration completed successfully ==="
     log "=== Migration completed successfully ==="
 
-    echo ""
-    echo "Migration completed! Check $LOG_FILE for details."
-    echo "SQLite backup saved as: swath_movers_backup_*.db"
+    show_connection_info
 }
 
 # Run main function

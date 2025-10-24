@@ -25,6 +25,7 @@ CREATE TABLE users (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+-- Note: created_at and updated_at are nullable to allow migration from SQLite
 
 -- Global deployments table
 CREATE TABLE global_deployments (

@@ -11,6 +11,10 @@ from shapely.geometry import LineString
 import json
 from math import radians, degrees, atan2, cos, sin
 from shapely.geometry import Polygon
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 
 
@@ -26,11 +30,11 @@ BASE_COORDS_CSV = os.path.join(PROJECT_DIR, "base.csv")
 
 # Database configuration - PostgreSQL
 DB_CONFIG = {
-    'dbname': 'swath_movers',
-    'user': 'oluseyioyetunde',
-    'password': '',
-    'host': 'localhost',
-    'port': '5432'
+    'dbname': os.getenv('DB_NAME', 'swath_movers'),
+    'user': os.getenv('DB_USER', 'aerys'),
+    'password': os.getenv('DB_PASSWORD', ''),
+    'host': os.getenv('DB_HOST', 'localhost'),
+    'port': os.getenv('DB_PORT', '5432')
 }
 
 # Connection pooling for better performance
@@ -54,7 +58,7 @@ def get_postgres_connection():
 def return_postgres_connection(conn):
     """Return PostgreSQL connection to pool"""
     connection_pool.putconn(conn)
-app.secret_key = "f6e3a4b5e1c2d89a345e2a3c9bd0a5f4"
+app.secret_key = os.getenv('FLASK_SECRET_KEY', "f6e3a4b5e1c2d89a345e2a3c9bd0a5f4")
 os.makedirs(SWATH_FOLDER, exist_ok=True)
 
 # Enable compression
