@@ -41,9 +41,10 @@ DB_CONFIG = {
 from psycopg2.pool import ThreadedConnectionPool
 
 # Initialize connection pool
+# Optimized for 5 workers × 4 threads = 20 concurrent workers
 connection_pool = ThreadedConnectionPool(
-    minconn=2,
-    maxconn=20,
+    minconn=10,  # 2 connections per worker
+    maxconn=50,  # 10 connections per worker with safety margin
     dbname=DB_CONFIG['dbname'],
     user=DB_CONFIG['user'],
     password=DB_CONFIG['password'],
