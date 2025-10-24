@@ -43,7 +43,7 @@ loglevel = "info"
 access_log_format = '%(h)s %(l)s %(u)s %(t)s "%(r)s" %(s)s %(b)s "%(f)s" "%(a)s" %(D)s'
 
 # Process optimization
-preload_app = True  # Load application code before forking workers
+preload_app = False  # Don't preload - let each worker create its own DB connections
 worker_tmp_dir = "/dev/shm"  # Use shared memory for worker heartbeat
 
 # Server hooks

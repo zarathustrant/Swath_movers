@@ -49,7 +49,8 @@ connection_pool = ThreadedConnectionPool(
     user=DB_CONFIG['user'],
     password=DB_CONFIG['password'],
     host=DB_CONFIG['host'],
-    port=DB_CONFIG['port']
+    port=DB_CONFIG['port'],
+    sslmode='disable'  # Disable SSL for local connections
 )
 
 def get_postgres_connection():
@@ -1085,7 +1086,14 @@ def logout():
 
 
 
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8080)
-
+# Run migrations when app starts (once per process)
 run_migrations_once()
+
+# Development server (only used for testing, not in production)
+# In production, Gunicorn/WSGI server is used via wsgi.py
+if __name__ == "__main__":
+    # Only runs when executing: python app.py directly
+    # NOT used in production with Gunicorn
+    print("⚠️  Starting Flask development server...")
+    print("⚠️  For production, use: gunicorn -c gunicorn_config.py wsgi:app")
+    app.run(host="0.0.0.0", port=8080, debug=False)
