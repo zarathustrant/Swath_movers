@@ -1,0 +1,983 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Post Plot Data Upload - Swath Movers</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Georgia', 'Garamond', serif;
+            background: linear-gradient(135deg, #f5e6d3 0%, #e8d4b8 100%);
+            min-height: 100vh;
+            padding: 40px 20px;
+            background-image:
+                radial-gradient(circle at 20% 50%, rgba(210, 180, 140, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 80% 80%, rgba(188, 143, 143, 0.1) 0%, transparent 50%);
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+            background: linear-gradient(to bottom, #fdfbf7 0%, #f9f4ed 100%);
+            padding: 0;
+            border-radius: 8px;
+            box-shadow:
+                0 10px 40px rgba(101, 67, 33, 0.15),
+                0 0 0 1px rgba(139, 90, 43, 0.1),
+                inset 0 1px 0 rgba(255, 255, 255, 0.8);
+        }
+
+        h1 {
+            color: #5d4037;
+            margin: 0;
+            padding: 35px 40px;
+            font-size: 42px;
+            font-weight: 400;
+            letter-spacing: 1px;
+            background: linear-gradient(135deg, #d4a574 0%, #c19a6b 100%);
+            border-bottom: 3px solid #8b5a2b;
+            text-shadow: 0 1px 2px rgba(255, 255, 255, 0.5);
+            border-radius: 8px 8px 0 0;
+        }
+
+        h2 {
+            color: #5d4037;
+            margin: 0;
+            padding: 20px 40px;
+            font-size: 24px;
+            font-weight: 600;
+            background: linear-gradient(to right, #e8d4b8 0%, transparent 100%);
+            border-left: 5px solid #c19a6b;
+            letter-spacing: 0.5px;
+        }
+
+        .nav {
+            margin: 0;
+            padding: 25px 40px;
+            border-bottom: 2px solid rgba(139, 90, 43, 0.2);
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            background: linear-gradient(to bottom, #fdfbf7, #f9f4ed);
+        }
+
+        .nav a {
+            color: #8b5a2b;
+            text-decoration: none;
+            font-size: 15px;
+            padding: 10px 20px;
+            border: 2px solid #c19a6b;
+            border-radius: 4px;
+            font-weight: 500;
+            background: #fdfbf7;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 4px rgba(101, 67, 33, 0.1);
+        }
+
+        .nav a:hover {
+            background: linear-gradient(135deg, #d4a574 0%, #c19a6b 100%);
+            color: #5d4037;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(101, 67, 33, 0.2);
+        }
+
+        .user-info {
+            color: #6d4c41;
+            font-size: 15px;
+            margin: 0;
+            padding: 20px 40px;
+            background: rgba(232, 212, 184, 0.3);
+            border-bottom: 1px solid rgba(139, 90, 43, 0.15);
+            font-weight: 500;
+        }
+
+        .upload-section {
+            border: 2px solid #c19a6b;
+            padding: 35px;
+            margin: 30px 40px;
+            background: linear-gradient(to bottom, #fdfbf7, #faf6f0);
+            border-radius: 6px;
+            box-shadow:
+                0 4px 12px rgba(101, 67, 33, 0.08),
+                inset 0 1px 0 rgba(255, 255, 255, 0.5);
+        }
+
+        .upload-section p {
+            margin: 12px 0;
+            font-size: 15px;
+            color: #6d4c41;
+            line-height: 1.8;
+            font-weight: 400;
+        }
+
+        .upload-section code {
+            background: #f4e4d0;
+            padding: 3px 8px;
+            border: 1px solid #d4a574;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            color: #8b5a2b;
+            font-weight: 600;
+        }
+
+        .upload-section ul {
+            margin: 15px 0 15px 25px;
+            font-size: 15px;
+            color: #6d4c41;
+            font-weight: 400;
+        }
+
+        label {
+            font-weight: 600;
+            color: #5d4037;
+            font-size: 15px;
+        }
+
+        select {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #d4a574;
+            border-radius: 5px;
+            background: #fdfbf7;
+            font-size: 15px;
+            color: #5d4037;
+            cursor: pointer;
+            font-family: 'Georgia', serif;
+            font-weight: 500;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%238b5a2b' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+            transition: all 0.3s ease;
+        }
+
+        select:hover {
+            border-color: #c19a6b;
+            background: #f9f4ed;
+        }
+
+        select:focus {
+            outline: none;
+            border-color: #8b5a2b;
+            box-shadow: 0 0 0 3px rgba(193, 154, 107, 0.2);
+        }
+
+        input[type="file"] {
+            padding: 12px;
+            margin: 15px 0;
+            border: 2px solid #d4a574;
+            border-radius: 5px;
+            background: #fdfbf7;
+            cursor: pointer;
+            width: 100%;
+            font-size: 14px;
+            font-family: 'Georgia', serif;
+            color: #5d4037;
+            transition: all 0.3s ease;
+        }
+
+        input[type="file"]:hover {
+            border-color: #c19a6b;
+            background: #f9f4ed;
+        }
+
+        button {
+            background: linear-gradient(135deg, #8b5a2b 0%, #6d4c41 100%);
+            color: #fdfbf7;
+            border: none;
+            padding: 14px 32px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            font-family: 'Georgia', serif;
+            letter-spacing: 0.5px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 8px rgba(101, 67, 33, 0.2);
+            margin-top: 10px;
+        }
+
+        button:hover {
+            background: linear-gradient(135deg, #a0694f 0%, #8b5a2b 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(101, 67, 33, 0.3);
+        }
+
+        button:active {
+            transform: translateY(0);
+            box-shadow: 0 3px 6px rgba(101, 67, 33, 0.2);
+        }
+
+        button:disabled {
+            background: linear-gradient(135deg, #bca393 0%, #a89688 100%);
+            color: #e8dcd0;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+
+        .result {
+            margin-top: 20px;
+            padding: 18px 22px;
+            border-radius: 5px;
+            display: none;
+            font-size: 14px;
+            line-height: 1.7;
+            white-space: pre-line;
+            font-weight: 500;
+            font-family: 'Georgia', serif;
+        }
+
+        .result.success {
+            background: linear-gradient(to right, #d4edda 0%, #c3e6cb 100%);
+            color: #155724;
+            border: 2px solid #b1dfbb;
+            display: block;
+        }
+
+        .result.error {
+            background: linear-gradient(to right, #f8d7da 0%, #f5c6cb 100%);
+            color: #721c24;
+            border: 2px solid #f1b0b7;
+            display: block;
+        }
+
+        table {
+            width: calc(100% - 80px);
+            border-collapse: separate;
+            border-spacing: 0;
+            margin: 30px 40px;
+            border: 2px solid #d4a574;
+            border-radius: 6px;
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(101, 67, 33, 0.08);
+        }
+
+        th, td {
+            padding: 16px 20px;
+            text-align: left;
+        }
+
+        th {
+            background: linear-gradient(135deg, #8b5a2b 0%, #6d4c41 100%);
+            color: #fdfbf7;
+            font-weight: 600;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            border-bottom: 3px solid #5d4037;
+        }
+
+        tr {
+            background: #fdfbf7;
+            transition: all 0.2s ease;
+        }
+
+        tr:nth-child(even) {
+            background: #f9f4ed;
+        }
+
+        tr:hover {
+            background: #f4e4d0;
+        }
+
+        td {
+            font-size: 14px;
+            color: #6d4c41;
+            font-weight: 500;
+            border-bottom: 1px solid rgba(212, 165, 116, 0.3);
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        .clear-btn {
+            background: linear-gradient(135deg, #a0522d 0%, #8b4513 100%);
+            color: #fdfbf7;
+            padding: 8px 18px;
+            font-size: 12px;
+            border: none;
+            border-radius: 4px;
+            box-shadow: 0 2px 6px rgba(160, 82, 45, 0.3);
+            transition: all 0.3s ease;
+        }
+
+        .clear-btn:hover {
+            background: linear-gradient(135deg, #8b4513 0%, #6d3410 100%);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(160, 82, 45, 0.4);
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 32px;
+            background: #e8d4b8;
+            border: 2px solid #c19a6b;
+            border-radius: 16px;
+            margin-top: 10px;
+            box-shadow: inset 0 2px 4px rgba(101, 67, 33, 0.1);
+            position: relative;
+            overflow: visible;
+        }
+
+        .progress-fill {
+            position: absolute;
+            left: 0;
+            top: 0;
+            height: 100%;
+            background: linear-gradient(90deg, #d4a574 0%, #c19a6b 50%, #d4a574 100%);
+            transition: width 0.4s ease;
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3);
+            border-radius: 14px 0 0 14px;
+            display: flex;
+            align-items: center;
+            padding-left: 15px;
+            color: #5d4037;
+            font-size: 13px;
+            font-weight: 700;
+            white-space: nowrap;
+            overflow: visible;
+        }
+
+        .instructions {
+            background: linear-gradient(135deg, #f9edd5 0%, #f4e4d0 100%);
+            border: 2px solid #d4a574;
+            border-left: 5px solid #8b5a2b;
+            padding: 25px 30px;
+            margin: 30px 40px;
+            border-radius: 6px;
+            box-shadow: 0 4px 12px rgba(101, 67, 33, 0.1);
+        }
+
+        .instructions h3 {
+            color: #5d4037;
+            font-size: 20px;
+            margin-bottom: 15px;
+            font-weight: 600;
+        }
+
+        .instructions ul {
+            margin-left: 25px;
+            color: #6d4c41;
+            font-weight: 400;
+        }
+
+        .instructions li {
+            margin: 10px 0;
+            line-height: 1.8;
+        }
+
+        .loading {
+            display: none;
+            margin-left: 10px;
+            color: #f9f4ed;
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .loading.active {
+            display: inline;
+        }
+
+        #selected-files {
+            margin: 15px 0;
+            font-size: 13px;
+            color: #6d4c41;
+            padding: 14px 18px;
+            background: #f9f4ed;
+            border: 2px solid #e8d4b8;
+            border-left: 4px solid #c19a6b;
+            border-radius: 4px;
+            font-weight: 500;
+        }
+
+        #transformation-info {
+            margin-top: 10px;
+            font-size: 13px;
+            color: #6d4c41;
+            font-weight: 500;
+            font-style: italic;
+        }
+
+        /* Help button */
+        .help-button {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #8b5a2b 0%, #6d4c41 100%);
+            color: #fdfbf7;
+            border: 3px solid #c19a6b;
+            font-size: 24px;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(101, 67, 33, 0.3);
+            transition: all 0.3s ease;
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: Georgia, serif;
+        }
+
+        .help-button:hover {
+            background: linear-gradient(135deg, #a0694f 0%, #8b5a2b 100%);
+            transform: scale(1.1);
+            box-shadow: 0 6px 16px rgba(101, 67, 33, 0.4);
+        }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 2000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(93, 64, 55, 0.8);
+            backdrop-filter: blur(4px);
+        }
+
+        .modal.active {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            background: linear-gradient(to bottom, #fdfbf7, #f9f4ed);
+            padding: 40px;
+            border-radius: 8px;
+            border: 3px solid #c19a6b;
+            box-shadow: 0 10px 40px rgba(101, 67, 33, 0.3);
+            max-width: 600px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            position: relative;
+        }
+
+        .modal-close {
+            position: absolute;
+            top: 15px;
+            right: 20px;
+            font-size: 32px;
+            font-weight: bold;
+            color: #8b5a2b;
+            cursor: pointer;
+            transition: color 0.3s ease;
+            line-height: 1;
+        }
+
+        .modal-close:hover {
+            color: #5d4037;
+        }
+
+        .modal-content h2 {
+            color: #5d4037;
+            margin: 0 0 25px 0;
+            padding: 0 0 15px 0;
+            font-size: 28px;
+            border-bottom: 3px solid #c19a6b;
+        }
+
+        .modal-content h3 {
+            color: #6d4c41;
+            margin: 25px 0 15px 0;
+            font-size: 20px;
+            font-weight: 600;
+        }
+
+        .modal-content p {
+            color: #6d4c41;
+            line-height: 1.8;
+            margin: 12px 0;
+            font-size: 15px;
+        }
+
+        .modal-content ul {
+            margin: 15px 0 15px 25px;
+            color: #6d4c41;
+            line-height: 1.8;
+        }
+
+        .modal-content li {
+            margin: 10px 0;
+            font-size: 15px;
+        }
+
+        .modal-content strong {
+            color: #5d4037;
+            font-weight: 600;
+        }
+
+        .modal-content code {
+            background: #f4e4d0;
+            padding: 2px 6px;
+            border: 1px solid #d4a574;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            color: #8b5a2b;
+        }
+    </style>
+</head>
+<body>
+    <!-- Help Button -->
+    <button class="help-button" onclick="openHelpModal()">?</button>
+
+    <!-- Help Modal -->
+    <div id="helpModal" class="modal">
+        <div class="modal-content">
+            <span class="modal-close" onclick="closeHelpModal()">&times;</span>
+            <h2>How to Use Post Plot</h2>
+
+            <h3>Overview</h3>
+            <p>Post Plot tracks seismic acquisition progress by managing source points and marking which shots have been acquired.</p>
+
+            <h3>Step 1: Upload Source Data</h3>
+            <p>Upload <code>.s01</code> files containing source point coordinates (in UTM format). The system automatically converts them to Lat/Lon using the selected transformation method.</p>
+            <ul>
+                <li><strong>File format:</strong> <code>swathN-PROJECT.s01</code> (e.g., swath04-BININ.s01)</li>
+                <li><strong>What it does:</strong> Defines all planned source shotpoints for a swath</li>
+                <li><strong>Result:</strong> Points appear as <span style="color: #f50303;">●</span> RED on the map</li>
+            </ul>
+
+            <h3>Step 2: Upload Acquisition Data</h3>
+            <p>Upload Excel or CSV files listing which shots have been acquired in the field.</p>
+            <ul>
+                <li><strong>File formats:</strong> <code>.xlsx</code> or <code>.csv</code> (any filename)</li>
+                <li><strong>Required columns:</strong> <code>Line</code>, <code>Station</code></li>
+                <li><strong>Multiple files:</strong> You can select and upload multiple files at once</li>
+                <li><strong>Select swath:</strong> Choose the target swath from the dropdown</li>
+                <li><strong>Result:</strong> Matching points turn <span style="color: #06e418;">●</span> GREEN on the map</li>
+            </ul>
+
+            <h3>Viewing Progress</h3>
+            <ul>
+                <li>Check the <strong>Current Data Status</strong> table to see statistics for each swath</li>
+                <li>Progress bars show acquisition completion percentage</li>
+                <li>Click <strong>Back to Map</strong> to visualize all points geographically</li>
+            </ul>
+
+            <h3>Tips</h3>
+            <ul>
+                <li>Upload source data first, then acquisition data</li>
+                <li>Date extraction is automatic from filenames (e.g., "25102025" → 25/10/2025)</li>
+                <li>Use the <strong>Clear</strong> button to remove all data for a swath if needed</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="nav">
+            <a href="/postplot/map">← Back to Map</a>
+            <a href="/map">Deployment Map</a>
+            <a href="/logout">Logout</a>
+        </div>
+
+        <h1>Post Plot Data Upload</h1>
+        <p class="user-info">Logged in as: <strong>{{ username }}</strong></p>
+
+        <div class="instructions">
+            <h3>Upload Instructions</h3>
+            <ul>
+                <li><strong>Step 1:</strong> Upload source swath CSVs to define all planned source shotpoints</li>
+                <li><strong>Step 2:</strong> Upload acquisition CSVs to mark which shots have been acquired</li>
+                <li>Source shots appear as <span style="color: #f50303;">●</span> RED on the map until acquired</li>
+                <li>Acquired shots appear as <span style="color: #06e418;">●</span> GREEN on the map</li>
+            </ul>
+        </div>
+
+        <h2>1. Upload .s01 Source File (with Coordinate Transformation)</h2>
+        <p>Upload .s01 files containing UTM (X, Y) coordinates that will be automatically converted to Lat/Lon.</p>
+        <p><strong>File naming:</strong> <code>swathN-PROJECT.s01</code> where N = 1-8 (e.g., swath04-BININ.s01)</p>
+        <p><strong>Format:</strong> Standard P1/90 .s01 format with source points (S), Line, Shotpoint, X, Y</p>
+
+        <div class="upload-section">
+            <div style="margin-bottom: 15px;">
+                <label for="transformation-select" style="display: block; margin-bottom: 5px;">
+                    Coordinate Transformation Method:
+                </label>
+                <select id="transformation-select">
+                    <option value="">Loading transformations...</option>
+                </select>
+                <div id="transformation-info"></div>
+            </div>
+
+            <input type="file" id="s01-file" accept=".s01">
+            <button onclick="uploadS01File()" id="s01-upload-btn">
+                Upload .s01 File
+                <span class="loading" id="s01-loading">Uploading...</span>
+            </button>
+            <div id="s01-result" class="result"></div>
+        </div>
+
+        <h2>2. Upload Acquisition Data</h2>
+        <p>Upload Excel or CSV files to mark which source shots have been acquired.</p>
+        <p><strong>Supported formats:</strong> <code>.xlsx</code>, <code>.csv</code> (any filename, multiple files allowed)</p>
+        <p><strong>Required columns:</strong> <code>Line, Station</code></p>
+        <p><strong>Format:</strong> One shotpoint per row (Station = shotpoint number)</p>
+
+        <div class="upload-section">
+            <div style="margin-bottom: 15px;">
+                <label for="acquisition-swath-select" style="display: block; margin-bottom: 5px; font-weight: bold;">
+                    Select Swath:
+                </label>
+                <select id="acquisition-swath-select" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    <option value="">-- Select Swath --</option>
+                    <option value="1">Swath 1</option>
+                    <option value="2">Swath 2</option>
+                    <option value="3">Swath 3</option>
+                    <option value="4">Swath 4</option>
+                    <option value="5">Swath 5</option>
+                    <option value="6">Swath 6</option>
+                    <option value="7">Swath 7</option>
+                    <option value="8">Swath 8</option>
+                </select>
+            </div>
+
+            <input type="file" id="acquisition-file" accept=".csv,.xlsx" multiple>
+            <div id="selected-files" style="margin: 10px 0; font-size: 13px; color: #666;"></div>
+            <button onclick="uploadAcquisitionFile()" id="acquisition-upload-btn">
+                Upload Acquisition Data
+                <span class="loading" id="acquisition-loading">Uploading...</span>
+            </button>
+            <div id="acquisition-result" class="result"></div>
+        </div>
+
+        <h2>3. Current Data Status</h2>
+        {% if error %}
+        <div class="result error">{{ error }}</div>
+        {% endif %}
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Swath</th>
+                    <th>Total Sources</th>
+                    <th>Acquired</th>
+                    <th>Pending</th>
+                    <th>Completion</th>
+                    <th>Last Upload</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for stat in swath_stats %}
+                <tr>
+                    <td><strong>Swath {{ stat.swath }}</strong></td>
+                    <td>{{ "{:,}".format(stat.total) }}</td>
+                    <td style="color: #06e418; font-weight: bold;">{{ "{:,}".format(stat.acquired) }}</td>
+                    <td style="color: #f50303; font-weight: bold;">{{ "{:,}".format(stat.pending) }}</td>
+                    <td>
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: {{ stat.percentage }}%;">
+                                {{ "%.1f"|format(stat.percentage) }}%
+                            </div>
+                        </div>
+                    </td>
+                    <td>{{ stat.last_upload.strftime('%Y-%m-%d %H:%M') if stat.last_upload else 'Never' }}</td>
+                    <td>
+                        <button class="clear-btn" onclick="clearSwathData({{ stat.swath }})">
+                            Clear Data
+                        </button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        function showResult(elementId, message, isSuccess) {
+            const el = document.getElementById(elementId);
+            el.textContent = message;
+            el.className = 'result ' + (isSuccess ? 'success' : 'error');
+            el.style.display = 'block';
+
+            // Auto-hide after 10 seconds
+            setTimeout(() => {
+                el.style.display = 'none';
+            }, 10000);
+        }
+
+        // Show selected files
+        document.getElementById('acquisition-file').addEventListener('change', function(e) {
+            const files = e.target.files;
+            const fileListDiv = document.getElementById('selected-files');
+
+            if (files.length === 0) {
+                fileListDiv.innerHTML = '';
+            } else if (files.length === 1) {
+                fileListDiv.innerHTML = `<strong>Selected:</strong> ${files[0].name}`;
+            } else {
+                fileListDiv.innerHTML = `<strong>Selected ${files.length} files:</strong> ${Array.from(files).map(f => f.name).join(', ')}`;
+            }
+        });
+
+        async function uploadAcquisitionFile() {
+            const fileInput = document.getElementById('acquisition-file');
+            const swathSelect = document.getElementById('acquisition-swath-select');
+            const files = fileInput.files;
+            const swath = swathSelect.value;
+            const btn = document.getElementById('acquisition-upload-btn');
+            const loading = document.getElementById('acquisition-loading');
+            const resultDiv = document.getElementById('acquisition-result');
+
+            if (!swath) {
+                showResult('acquisition-result', 'Please select a swath', false);
+                return;
+            }
+
+            if (files.length === 0) {
+                showResult('acquisition-result', 'Please select at least one file', false);
+                return;
+            }
+
+            // Disable button and show loading
+            btn.disabled = true;
+            loading.classList.add('active');
+
+            let totalUpdated = 0;
+            let totalNotFound = 0;
+            let successCount = 0;
+            let failureCount = 0;
+            const results = [];
+
+            // Upload files sequentially
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                const formData = new FormData();
+                formData.append('file', file);
+                formData.append('swath', swath);
+
+                try {
+                    showResult('acquisition-result', `Uploading file ${i + 1}/${files.length}: ${file.name}...`, true);
+
+                    const response = await fetch('/postplot/upload_acquisition', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    const data = await response.json();
+
+                    if (data.success) {
+                        successCount++;
+                        totalUpdated += data.updated || 0;
+                        totalNotFound += data.not_found || 0;
+                        results.push(`✓ ${file.name}: ${data.updated || 0} shots`);
+                    } else {
+                        failureCount++;
+                        results.push(`✗ ${file.name}: ${data.error || 'Failed'}`);
+                    }
+                } catch (error) {
+                    failureCount++;
+                    results.push(`✗ ${file.name}: ${error.message}`);
+                }
+            }
+
+            btn.disabled = false;
+            loading.classList.remove('active');
+
+            // Show summary
+            let summary = `Processed ${files.length} file(s): ${successCount} succeeded, ${failureCount} failed\n`;
+            summary += `Total: ${totalUpdated} shots marked as acquired in Swath ${swath}`;
+            if (totalNotFound > 0) {
+                summary += ` (${totalNotFound} not found in source data)`;
+            }
+            summary += '\n\n' + results.join('\n');
+
+            showResult('acquisition-result', summary, successCount > 0);
+
+            // Reload page after 2 seconds if any succeeded
+            if (successCount > 0) {
+                setTimeout(() => location.reload(), 2000);
+            }
+        }
+
+        function clearSwathData(swathNum) {
+            if (!confirm(`Are you sure you want to clear ALL data for Swath ${swathNum}?\n\nThis will delete all source points and acquisition records for this swath.`)) {
+                return;
+            }
+
+            fetch('/postplot/clear_swath', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({swath: swathNum})
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert(data.message);
+                    location.reload();
+                } else {
+                    alert('Error: ' + (data.error || 'Failed to clear data'));
+                }
+            })
+            .catch(error => {
+                alert('Error: ' + error.message);
+            });
+        }
+
+        // Load available coordinate transformations
+        function loadTransformations() {
+            fetch('/postplot/transformations', {
+                method: 'GET',
+                credentials: 'same-origin'  // Include cookies for session auth
+            })
+                .then(response => {
+                    console.log('Transformations response status:', response.status);
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('Transformations data:', data);
+                    const select = document.getElementById('transformation-select');
+                    select.innerHTML = '<option value="">-- Select Transformation --</option>';
+
+                    if (data.error) {
+                        console.error('API error:', data.error);
+                        select.innerHTML = `<option value="">Error: ${data.error}</option>`;
+                        return;
+                    }
+
+                    if (data.transformations && data.transformations.length > 0) {
+                        data.transformations.forEach(transform => {
+                            const option = document.createElement('option');
+                            option.value = transform.name;
+                            option.textContent = `${transform.name} (${transform.rmse_meters.toFixed(2)}m accuracy)`;
+                            option.dataset.rmse = transform.rmse_meters;
+                            option.dataset.points = transform.control_point_count;
+                            option.dataset.description = transform.description || '';
+                            select.appendChild(option);
+                        });
+                        console.log('Loaded', data.transformations.length, 'transformations');
+                    } else {
+                        select.innerHTML = '<option value="">No transformations available</option>';
+                        console.warn('No transformations found in response');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading transformations:', error);
+                    document.getElementById('transformation-select').innerHTML =
+                        `<option value="">Error loading transformations</option>`;
+                });
+        }
+
+        // Show transformation info when selected
+        document.getElementById('transformation-select')?.addEventListener('change', function() {
+            const selectedOption = this.options[this.selectedIndex];
+            const infoDiv = document.getElementById('transformation-info');
+
+            if (selectedOption.value) {
+                const rmse = selectedOption.dataset.rmse;
+                const points = selectedOption.dataset.points;
+                const desc = selectedOption.dataset.description;
+
+                infoDiv.innerHTML = `
+                    <strong>Accuracy:</strong> ${parseFloat(rmse).toFixed(2)} meters<br>
+                    <strong>Control Points:</strong> ${points}<br>
+                    ${desc ? `<strong>Description:</strong> ${desc}` : ''}
+                `;
+                infoDiv.style.color = '#057af0';
+            } else {
+                infoDiv.innerHTML = '';
+            }
+        });
+
+        // Upload .s01 file
+        function uploadS01File() {
+            const fileInput = document.getElementById('s01-file');
+            const transformSelect = document.getElementById('transformation-select');
+            const file = fileInput.files[0];
+            const transformation = transformSelect.value;
+            const btn = document.getElementById('s01-upload-btn');
+            const loading = document.getElementById('s01-loading');
+
+            if (!file) {
+                showResult('s01-result', 'Please select a .s01 file', false);
+                return;
+            }
+
+            if (!transformation) {
+                showResult('s01-result', 'Please select a coordinate transformation method', false);
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('s01_file', file);
+            formData.append('transformation', transformation);
+
+            // Disable button and show loading
+            btn.disabled = true;
+            loading.classList.add('active');
+
+            fetch('/postplot/upload_s01', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                btn.disabled = false;
+                loading.classList.remove('active');
+
+                if (data.success) {
+                    const msg = `${data.message}\nTransformation: ${data.transformation}\nAccuracy: ${data.rmse_meters.toFixed(2)}m`;
+                    showResult('s01-result', msg, true);
+                    // Reload page after 2 seconds to update statistics
+                    setTimeout(() => location.reload(), 2000);
+                } else {
+                    showResult('s01-result', data.error || 'Upload failed', false);
+                }
+            })
+            .catch(error => {
+                btn.disabled = false;
+                loading.classList.remove('active');
+                showResult('s01-result', `Error: ${error.message}`, false);
+            });
+        }
+
+        // File input change handlers - show selected filename
+        // Removed duplicate event listeners - already handled above
+
+        // Load transformations on page load
+        loadTransformations();
+
+        // Help modal functions
+        function openHelpModal() {
+            document.getElementById('helpModal').classList.add('active');
+        }
+
+        function closeHelpModal() {
+            document.getElementById('helpModal').classList.remove('active');
+        }
+
+        // Close modal when clicking outside
+        document.getElementById('helpModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeHelpModal();
+            }
+        });
+
+        // Close modal with Escape key
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeHelpModal();
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Post Plot Acquisition Map - Swath Movers</title>
+
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+        }
+
+        #map {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            left: 0;
+            right: 0;
+        }
+
+        /* Control panels */
+        .leaflet-control {
+            background: white;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+        }
+
+        #swath-selector {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 1000;
+            background: white;
+            padding: 15px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+            max-width: 220px;
+        }
+
+        #swath-selector h4 {
+            margin: 0 0 10px 0;
+            font-size: 14px;
+            color: #333;
+        }
+
+        #swath-selector label {
+            display: block;
+            margin: 6px 0;
+            font-size: 13px;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        #swath-selector input[type="checkbox"] {
+            margin-right: 6px;
+            cursor: pointer;
+        }
+
+        #swath-selector button {
+            width: 100%;
+            padding: 8px;
+            margin-top: 10px;
+            background: #057af0;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: bold;
+        }
+
+        #swath-selector button:hover {
+            background: #0461c9;
+        }
+
+        #swath-selector .toggle-btn {
+            background: #6c757d;
+            margin-top: 5px;
+            font-size: 12px;
+            padding: 6px;
+        }
+
+        #swath-selector .toggle-btn:hover {
+            background: #5a6268;
+        }
+
+        #legend {
+            position: absolute;
+            bottom: 30px;
+            right: 10px;
+            z-index: 1000;
+            background: white;
+            padding: 12px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+            max-width: 200px;
+        }
+
+        #legend h4 {
+            margin: 0 0 10px 0;
+            font-size: 14px;
+            color: #333;
+        }
+
+        #legend .legend-item {
+            margin: 8px 0;
+            display: flex;
+            align-items: center;
+            font-size: 12px;
+        }
+
+        #legend .legend-line {
+            display: inline-block;
+            width: 30px;
+            height: 3px;
+            margin-right: 8px;
+        }
+
+        #legend .legend-point {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        #stats-panel {
+            position: absolute;
+            bottom: 30px;
+            left: 10px;
+            z-index: 1000;
+            background: white;
+            padding: 12px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+            min-width: 220px;
+        }
+
+        #stats-panel h4 {
+            margin: 0 0 10px 0;
+            font-size: 14px;
+            color: #333;
+        }
+
+        #stats-panel .stat-row {
+            margin: 5px 0;
+            font-size: 13px;
+        }
+
+        #stats-panel .stat-label {
+            font-weight: bold;
+        }
+
+        #stats-panel .divider {
+            margin: 10px 0;
+            padding-top: 10px;
+            border-top: 1px solid #ddd;
+        }
+
+        #navigation {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 1000;
+            background: white;
+            padding: 10px 15px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+        }
+
+        #navigation a {
+            color: #057af0;
+            text-decoration: none;
+            margin-right: 15px;
+            font-size: 13px;
+        }
+
+        #navigation a:hover {
+            text-decoration: underline;
+        }
+
+        #navigation .username {
+            color: #666;
+            font-size: 12px;
+            margin-left: 10px;
+        }
+
+        /* Loading indicator */
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 2000;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 20px 40px;
+            border-radius: 5px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+            font-size: 14px;
+            display: none;
+        }
+
+        #loading.active {
+            display: block;
+        }
+
+        /* Line labels */
+        .line-label {
+            background: none;
+            border: none;
+            box-shadow: none;
+            font-weight: bold;
+            font-size: 11px;
+            color: #057af0;
+            text-shadow: 1px 1px 2px white, -1px -1px 2px white;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <div id="navigation">
+        <a href="/postplot/upload">Upload Data</a>
+        <a href="/map">Deployment Map</a>
+        <a href="/logout">Logout</a>
+        <span class="username">{{ username }}</span>
+    </div>
+
+    <!-- Map container -->
+    <div id="map"></div>
+
+    <!-- Loading indicator -->
+    <div id="loading">
+        Loading map data...
+    </div>
+
+    <!-- Swath selector -->
+    <div id="swath-selector">
+        <h4>Select Swaths</h4>
+        <div id="swath-checkboxes">
+            <label><input type="checkbox" value="1" checked> Swath 1</label>
+            <label><input type="checkbox" value="2" checked> Swath 2</label>
+            <label><input type="checkbox" value="3" checked> Swath 3</label>
+            <label><input type="checkbox" value="4" checked> Swath 4</label>
+            <label><input type="checkbox" value="5" checked> Swath 5</label>
+            <label><input type="checkbox" value="6" checked> Swath 6</label>
+            <label><input type="checkbox" value="7" checked> Swath 7</label>
+            <label><input type="checkbox" value="8" checked> Swath 8</label>
+        </div>
+        <button id="apply-swath-filter">Apply Filter</button>
+        <button id="toggle-all-swaths" class="toggle-btn">Deselect All</button>
+    </div>
+
+    <!-- Statistics panel -->
+    <div id="stats-panel">
+        <h4>Acquisition Stats</h4>
+        <div class="stat-row">
+            <span class="stat-label">Total Sources:</span> <span id="total-sources">0</span>
+        </div>
+        <div class="stat-row" style="color: #06e418;">
+            <span class="stat-label">Acquired:</span> <span id="acquired-sources">0</span>
+            (<span id="acquired-pct">0%</span>)
+        </div>
+        <div class="stat-row" style="color: #f50303;">
+            <span class="stat-label">Pending:</span> <span id="pending-sources">0</span>
+        </div>
+        <div class="divider">
+            <div class="stat-row" style="font-size: 12px;">
+                <span class="stat-label">Receiver Lines:</span> <span id="receiver-count">0</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Legend -->
+    <div id="legend">
+        <h4>Legend</h4>
+        <div class="legend-item">
+            <span class="legend-line" style="background: #057af0;"></span>
+            <span>Receiver Lines</span>
+        </div>
+        <div class="legend-item">
+            <span class="legend-point" style="background: #f50303;"></span>
+            <span>Source (Not Acquired)</span>
+        </div>
+        <div class="legend-item">
+            <span class="legend-point" style="background: #06e418;"></span>
+            <span>Source (Acquired)</span>
+        </div>
+    </div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <script>
+        // Initialize map
+        const map = L.map('map', {
+            center: [5.5, 7.0],
+            zoom: 13,
+            preferCanvas: true,
+            renderer: L.canvas()
+        });
+
+        // Add base layer (OpenTopo)
+        L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+            attribution: 'Map data © OpenStreetMap contributors',
+            maxZoom: 19
+        }).addTo(map);
+
+        // Layers
+        let receiverLinesLayer = L.geoJSON(null, {
+            style: function(feature) {
+                return {
+                    color: '#057af0',
+                    weight: 2,
+                    opacity: 0.8
+                };
+            },
+            onEachFeature: function(feature, layer) {
+                // Add tooltip with line info
+                if (feature.properties.line) {
+                    layer.bindTooltip(
+                        `Line ${feature.properties.line}`,
+                        { permanent: false, direction: 'center', className: 'line-label' }
+                    );
+                }
+
+                // Add line number label (only once per line number)
+                if (feature.properties.display_label) {
+                    const coords = feature.geometry.coordinates;
+                    const midpoint = coords[Math.floor(coords.length / 2)];
+
+                    L.marker([midpoint[1], midpoint[0]], {
+                        icon: L.divIcon({
+                            className: 'line-label',
+                            html: `<div>${feature.properties.display_label}</div>`,
+                            iconSize: [40, 20]
+                        })
+                    }).addTo(map);
+                }
+            }
+        }).addTo(map);
+
+        let sourcePointsLayer = L.geoJSON(null, {
+            pointToLayer: function(feature, latlng) {
+                const color = feature.properties.is_acquired ? '#06e418' : '#f50303';
+
+                return L.circleMarker(latlng, {
+                    radius: 2,
+                    fillColor: color,
+                    color: color,
+                    weight: 0.5,
+                    opacity: 0.8,
+                    fillOpacity: 0.7
+                });
+            },
+            onEachFeature: function(feature, layer) {
+                const props = feature.properties;
+                const status = props.is_acquired ? 'ACQUIRED ✓' : 'NOT ACQUIRED';
+                const statusColor = props.is_acquired ? 'green' : 'red';
+
+                let popupContent = `
+                    <b>Line:</b> ${props.line}<br>
+                    <b>Shotpoint:</b> ${props.shotpoint}<br>
+                    <b>Swath:</b> ${props.swath}<br>
+                    <b>Status:</b> <span style="color: ${statusColor}; font-weight: bold;">${status}</span>
+                `;
+
+                if (props.acquired_at) {
+                    popupContent += `<br><b>Acquired:</b> ${new Date(props.acquired_at).toLocaleString()}`;
+                }
+
+                layer.bindPopup(popupContent);
+            }
+        }).addTo(map);
+
+        // Track dynamically created line layers and label markers for removal
+        let currentLineLayers = [];
+        let currentLabelMarkers = [];
+
+        // Load map data
+        function loadMapData(selectedSwaths = [1,2,3,4,5,6,7,8]) {
+            const loading = document.getElementById('loading');
+            loading.classList.add('active');
+
+            console.log('Loading map data for swaths:', selectedSwaths);
+
+            // Clear existing layers
+            receiverLinesLayer.clearLayers();
+            sourcePointsLayer.clearLayers();
+
+            // Remove all dynamically created line layers from previous load
+            currentLineLayers.forEach(layer => {
+                map.removeLayer(layer);
+            });
+            currentLineLayers = [];
+
+            // Remove all label markers from previous load
+            currentLabelMarkers.forEach(marker => {
+                map.removeLayer(marker);
+            });
+            currentLabelMarkers = [];
+
+            // Load receiver lines (filtered by swath) - EXACT APPROACH FROM map.html
+            fetch('/geojson_lines')
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('Received geojson_lines data:', data);
+
+                    if (!data.swaths) {
+                        console.error('No swaths property in data');
+                        return;
+                    }
+
+                    console.log('Swath keys:', Object.keys(data.swaths));
+                    console.log('Number of swaths:', Object.keys(data.swaths).length);
+
+                    let totalReceiverLines = 0;
+
+                    // Process each swath - EXACT SAME AS map.html
+                    Object.entries(data.swaths).forEach(([swathName, geojson]) => {
+                        // Extract swath number from name (swathName is just "1", "2", etc., not "swath_1")
+                        const swathNum = parseInt(swathName);
+
+                        console.log(`Found swath key: ${swathName}, parsed number: ${swathNum}`);
+
+                        // Skip if this swath is not selected
+                        if (!selectedSwaths.includes(swathNum)) {
+                            console.log(`Skipping swath ${swathNum} (not in selected list)`);
+                            return;
+                        }
+
+                        console.log(`Processing swath ${swathName}, features:`, geojson.features.length);
+
+                        // Add ENTIRE geojson to map - NO FILTERING (same as map.html)
+                        const lineLayer = L.geoJSON(geojson, {
+                            style: feature => {
+                                if (feature.geometry.type === "LineString" && feature.properties.type === "swath_edge") {
+                                    return {
+                                        color: "#e74c3c",
+                                        weight: 2,
+                                        dashArray: "5,5"
+                                    };
+                                }
+                                return {
+                                    color: "#057af0",
+                                    weight: 2,
+                                    opacity: 0.8
+                                };
+                            },
+                            onEachFeature: (feature, layer) => {
+                                const props = feature.properties;
+                                if (feature.geometry.type === "LineString") {
+                                    const { line, first_shot, last_shot, type, extended_points } = props;
+                                    layer.bindTooltip(`Line ${line}<br>Shots ${first_shot}–${last_shot}`, { sticky: true });
+                                    totalReceiverLines++;
+
+                                    let color = 'black';
+                                    if (type === 'R') color = 'blue';
+                                    if (type === 'S') color = 'red';
+
+                                    // Only show label if display_label is not empty
+                                    const displayLabel = feature.properties.display_label;
+                                    if (displayLabel && extended_points && extended_points.length >= 10) {
+                                        const [lon3, lat3] = extended_points[2];   // 3rd point
+                                        const [lon10, lat10] = extended_points[9]; // 10th point
+
+                                        // Correct longitude distortion by latitude
+                                        const latCorrection = Math.cos(lat3 * Math.PI / 180);
+                                        const dx = (lon10 - lon3) * latCorrection;
+                                        const dy = lat10 - lat3;
+                                        let angle = Math.atan2(dy, dx) * (260 / Math.PI);
+
+                                        // Add vertical offset to the label position (move upward visually)
+                                        const verticalOffset = 0.002; // Small value ~10 meters up
+                                        const horizontalOffset = 0.0008;
+                                        const labelLat = lat3 + verticalOffset;
+                                        const labelLon = lon3 + horizontalOffset;
+
+                                        const labelMarker = L.marker([labelLat, labelLon], {
+                                            icon: L.divIcon({
+                                                className: 'custom-line-label',
+                                                html: `<div style="
+                                                    color: ${color};
+                                                    font-weight: bold;
+                                                    font-size: 11px;
+                                                    transform: rotate(${angle}deg);
+                                                    transform-origin: left center;
+                                                    text-shadow: 1px 1px 2px white;
+                                                    white-space: nowrap;
+                                                ">${displayLabel}</div>`,
+                                                iconSize: [60, 12],
+                                                iconAnchor: [0, 6]
+                                            }),
+                                            interactive: false
+                                        }).addTo(map);
+
+                                        // Track this label marker for removal later
+                                        currentLabelMarkers.push(labelMarker);
+                                    }
+                                }
+
+                                // Handle swath edge lines
+                                if (feature.geometry.type === "LineString" && feature.properties.type === "swath_edge") {
+                                    const edgeName = feature.properties.name || `Swath ${swathName}`;
+                                    layer.bindTooltip(edgeName, { sticky: true });
+                                }
+                            }
+                        }).addTo(map);
+
+                        // Track this layer for removal later
+                        currentLineLayers.push(lineLayer);
+
+                        console.log(`Added all features from ${swathName} to map`);
+                    });
+
+                    console.log(`Total receiver lines added: ${totalReceiverLines}`);
+                    document.getElementById('receiver-count').textContent = totalReceiverLines.toLocaleString();
+                })
+                .catch(error => {
+                    console.error('Error loading receiver lines:', error);
+                    alert('Failed to load receiver lines: ' + error.message);
+                });
+
+            // Load source points (filtered by swath)
+            // Add timestamp to prevent caching issues after acquisition uploads
+            const swathParam = selectedSwaths.join(',');
+            const timestamp = new Date().getTime();
+            fetch(`/postplot/geojson/source_points?swaths=${swathParam}&_t=${timestamp}`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('Received source points data:', data);
+                    sourcePointsLayer.addData(data);
+                    updateStatistics(data);
+                    loading.classList.remove('active');
+                })
+                .catch(error => {
+                    console.error('Error loading source points:', error);
+                    loading.classList.remove('active');
+                    // Don't alert here since source data might not exist yet
+                });
+        }
+
+        // Update statistics
+        function updateStatistics(geojsonData) {
+            const total = geojsonData.features.length;
+            const acquired = geojsonData.features.filter(f => f.properties.is_acquired).length;
+            const pending = total - acquired;
+            const pct = total > 0 ? ((acquired / total) * 100).toFixed(1) : 0;
+
+            document.getElementById('total-sources').textContent = total.toLocaleString();
+            document.getElementById('acquired-sources').textContent = acquired.toLocaleString();
+            document.getElementById('acquired-pct').textContent = pct + '%';
+            document.getElementById('pending-sources').textContent = pending.toLocaleString();
+        }
+
+        // Apply filter button handler
+        document.getElementById('apply-swath-filter').addEventListener('click', function() {
+            const checkboxes = document.querySelectorAll('#swath-selector input[type="checkbox"]:checked');
+            const selectedSwaths = Array.from(checkboxes).map(cb => parseInt(cb.value));
+
+            if (selectedSwaths.length === 0) {
+                alert('Please select at least one swath');
+                return;
+            }
+
+            loadMapData(selectedSwaths);
+        });
+
+        // Toggle all button handler
+        document.getElementById('toggle-all-swaths').addEventListener('click', function() {
+            const checkboxes = document.querySelectorAll('#swath-selector input[type="checkbox"]');
+            const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+
+            checkboxes.forEach(cb => cb.checked = !allChecked);
+            this.textContent = allChecked ? 'Select All' : 'Deselect All';
+        });
+
+        // Initial load (all swaths)
+        loadMapData();
+    </script>
+</body>
+</html>

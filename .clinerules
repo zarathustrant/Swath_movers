@@ -1,0 +1,735 @@
+# Telegram Bot Commands Implementation - Memory File
+
+## Project Overview
+
+**Application**: Swath Movers - Seismic Survey Management System
+**Enhancement**: Transform basic backup bot into comprehensive monitoring and reporting system
+**Platform**: Telegram Bot using Python
+**Database**: PostgreSQL with 58,641 coordinates, 23,722 deployments, 123 survey lines, 8 swaths
+
+---
+
+## The Science Behind It
+
+### What is Swath Movers?
+
+Swath Movers is a seismic survey data management application used in oil & gas exploration. It tracks:
+
+1. **Coordinates**: 58,641 shotpoints (locations where sensors are placed) across 123 survey lines
+2. **Deployments**: 23,722 equipment deployments of various types:
+   - **Nodes**: Autonomous seismic recorders (13,207 deployed, 9,847 retrieved)
+   - **Hydrophones**: Underwater seismic sensors (557 deployed, 17 retrieved)
+   - **Marsh Geophones**: Specialized sensors for wetland areas (38 deployed, 35 retrieved)
+   - **SM10 Geophones**: Standard ground sensors (6 deployed, 15 retrieved)
+3. **Swaths**: 8 geographic sections organizing the survey area
+4. **Survey Lines**: 123 lines where equipment is deployed in sequence
+
+### The Problem Being Solved
+
+**Field Challenge**: Survey teams need real-time access to deployment status while in remote locations:
+- Which lines are complete?
+- How much equipment is still deployed?
+- What's the project completion percentage?
+- Which areas need priority attention?
+
+**Current Limitation**: Data only accessible via web interface requiring laptop and internet
+
+**Solution**: Telegram bot provides instant mobile access to:
+- Statistics and progress reports
+- Line-by-line status
+- Swath-by-swath analysis
+- Export capabilities
+- Professional PDF reports for management
+
+### Why Telegram?
+
+1. **Ubiquitous**: Works on any phone, no special app needed
+2. **Offline-First**: Messages queue when offline, sync when connected
+3. **Fast**: Instant notifications and responses
+4. **File Sharing**: Can send PDFs, CSVs directly
+5. **Bot API**: Rich features (buttons, formatting, file uploads)
+6. **Group Support**: Multiple team members can interact
+7. **No Authentication Hassle**: Chat ID-based authorization
+
+---
+
+## Architecture & Design
+
+### System Architecture
+
+```
+User (Telegram) → Bot API → telegram_backup_service.py
+                                    ↓
+                          telegram_bot_commands.py (router)
+                                    ↓
+                    ┌───────────────┴───────────────┐
+                    ↓                               ↓
+         telegram_bot_queries.py          telegram_bot_formatting.py
+                    ↓                               ↓
+              PostgreSQL DB                   HTML Messages
+                    ↓                               ↓
+         telegram_bot_stats.py ←─────────────────→ User
+                    ↓
+    ┌───────────────┼───────────────┐
+    ↓               ↓               ↓
+telegram_bot_   telegram_bot_   telegram_bot_
+charts.py       exports.py      pdf.py
+    ↓               ↓               ↓
+  PNG Charts      CSV Files      PDF Reports
+    ↓               ↓               ↓
+                User (Telegram)
+```
+
+### Technology Stack
+
+**Core Technologies:**
+- Python 3.x
+- PostgreSQL (existing database)
+- Telegram Bot API
+- psycopg2 (PostgreSQL adapter)
+- python-dotenv (environment variables)
+
+**New Dependencies:**
+- matplotlib (chart generation)
+- reportlab (PDF generation)
+- pandas (data processing)
+- Pillow (image manipulation)
+
+### Module Responsibilities
+
+#### 1. telegram_bot_queries.py (✅ COMPLETE)
+**Purpose**: Database abstraction layer
+**Why**: Separates SQL logic from business logic, makes queries reusable
+**Contains**:
+- `get_overall_stats()` - Project-wide statistics
+- `get_line_stats(line_num)` - Single line analysis
+- `get_all_lines_summary()` - All lines overview
+- `get_swath_stats(swath_num)` - Swath analysis
+- `get_progress_by_type()` - Deployment type progress
+- `get_retrieval_report()` - Outstanding equipment report
+- `get_user_stats()` - User activity
+- `get_recent_activity()` - Timeline data
+- `get_line_timeline()` - Line-specific timeline
+
+**Design Pattern**: Repository pattern for data access
+
+#### 2. telegram_bot_formatting.py (✅ COMPLETE)
+**Purpose**: Message formatting and presentation
+**Why**: Consistent, professional message formatting across all commands
+**Contains**:
+- `progress_bar()` - ASCII progress bars (▓▓▓▓▓░░░░░)
+- `format_stats_message()` - Overall statistics
+- `format_line_details()` - Line reports
+- `format_swath_details()` - Swath reports
+- `format_help_message()` - Command help
+- HTML formatting helpers
+- Status icons (✅ 🔴 🟡 🟢)
+
+**Design Pattern**: Utility/Helper class with static methods
+
+#### 3. telegram_bot_charts.py (✅ COMPLETE)
+**Purpose**: Visual chart generation
+**Why**: Professional visualizations for reports and analysis
+**Contains**:
+- `create_progress_bar_chart()` - Horizontal bar charts
+- `create_pie_chart()` - Deployment type breakdown
+- `create_timeline_chart()` - Activity over time
+- `create_completion_gauge()` - Donut chart gauge
+- `create_swath_comparison_chart()` - Swath comparison
+- `create_line_status_chart()` - Top lines by outstanding
+- `create_user_activity_chart()` - User contributions
+- `create_heatmap()` - Coverage heatmap
+
+**Design Pattern**: Factory pattern for chart creation
+**Output**: BytesIO PNG images ready for Telegram
+
+#### 4. telegram_bot_stats.py (⏳ PENDING)
+**Purpose**: Statistics calculation and aggregation
+**Why**: Business logic layer between queries and presentation
+**Needs**:
+- Aggregate data from queries
+- Calculate derived metrics (percentages, averages, trends)
+- Cache frequently accessed stats
+- Provide high-level analytics
+- Velocity calculations (items/day)
+- Projection algorithms (completion dates)
+
+**Design Pattern**: Service layer pattern
+
+#### 5. telegram_bot_exports.py (⏳ PENDING)
+**Purpose**: Data export functionality
+**Why**: Users need raw data for offline analysis
+**Needs**:
+- `export_line_csv(line_num)` - Single line data
+- `export_swath_csv(swath_num)` - Swath data
+- `export_all_csv()` - Complete dataset
+- `export_retrieval_csv()` - Outstanding items list
+- Excel support with formatting
+- GeoJSON export (for GIS tools)
+
+**Design Pattern**: Strategy pattern for different export formats
+
+#### 6. telegram_bot_pdf.py (⏳ PENDING - MOST COMPLEX)
+**Purpose**: Professional PDF report generation
+**Why**: Management and client-ready documentation
+**Needs**:
+- `generate_daily_report()` - Daily summary PDF (2-3 pages)
+- `generate_line_report(line_num)` - Line report (3-5 pages)
+- `generate_swath_report(swath_num)` - Swath report (4-6 pages)
+- `generate_completion_report()` - Full project report (8-12 pages)
+- `generate_retrieval_plan()` - Action plan (5-7 pages)
+- Header/footer management
+- Page numbering
+- Charts embedded in PDFs
+- Tables with styling
+- Professional layout
+
+**Dependencies**: reportlab, matplotlib (for embedded charts)
+**Design Pattern**: Builder pattern for PDF construction
+
+#### 7. telegram_bot_commands.py (⏳ PENDING - CRITICAL)
+**Purpose**: Command routing and handling
+**Why**: Central point for processing all user commands
+**Needs**:
+- Command parser (extract command and arguments)
+- Command router (dispatch to correct handler)
+- Handler methods for each command:
+  - `/start` - Welcome message
+  - `/help` - Command list
+  - `/stats` - Overall statistics
+  - `/today` - Today's activity
+  - `/line [num]` - Line details
+  - `/lines [filter]` - Line list
+  - `/swath [num]` - Swath details
+  - `/swaths` - All swaths
+  - `/progress [type]` - Progress report
+  - `/retrieval` - Retrieval status
+  - `/users` - User statistics
+  - `/backup` - Manual backup
+  - `/export [type] [id]` - Export data
+  - `/report [type] [id]` - Generate PDF
+- Error handling
+- Permission checking
+- Rate limiting
+
+**Design Pattern**: Command pattern with handler registry
+
+#### 8. telegram_backup_service.py (⏳ NEEDS UPDATE)
+**Purpose**: Main service orchestrator
+**Why**: Integrates all modules into working service
+**Current**: Only handles backups
+**Needs to Add**:
+- Command message detection
+- Parse incoming messages for commands
+- Call telegram_bot_commands.py to handle
+- Send formatted responses back to Telegram
+- Handle file uploads (PDFs, CSVs)
+- Long-polling or webhook for receiving messages
+- Multi-user support (multiple chat IDs)
+- Background job scheduling (optional notifications)
+
+**Design Pattern**: Facade pattern orchestrating all modules
+
+---
+
+## Implementation Phases
+
+### Phase 1: Foundation (✅ 75% COMPLETE)
+**Status**: 3 of 4 modules complete
+**Completed**:
+- ✅ telegram_bot_queries.py (database layer)
+- ✅ telegram_bot_formatting.py (message formatting)
+- ✅ telegram_bot_charts.py (chart generation)
+
+**Remaining**:
+- ⏳ telegram_bot_stats.py (statistics layer)
+
+**Estimated Time**: 1-2 hours for stats module
+
+### Phase 2: Core Commands (⏳ NOT STARTED)
+**Priority**: HIGH - Get basic functionality working
+**Modules Needed**:
+- telegram_bot_stats.py
+- telegram_bot_commands.py (basic commands only)
+- Update telegram_backup_service.py
+
+**Commands to Implement**:
+1. `/start` - Welcome
+2. `/help` - Command list
+3. `/stats` - Overall stats
+4. `/today` - Today's activity
+5. `/line [num]` - Line details
+6. `/swath [num]` - Swath details
+7. `/swaths` - All swaths comparison
+
+**Estimated Time**: 4-6 hours
+**Deliverable**: Working bot with 7 basic commands
+
+### Phase 3: Advanced Analysis (⏳ NOT STARTED)
+**Priority**: MEDIUM
+**Commands to Add**:
+1. `/lines [filter]` - Line filtering
+2. `/progress [type]` - Progress analysis
+3. `/retrieval` - Retrieval report
+4. `/users` - User statistics
+
+**Features**:
+- Interactive buttons (inline keyboards)
+- Pagination for long lists
+- Advanced filtering
+
+**Estimated Time**: 3-4 hours
+**Deliverable**: Full statistics and analysis
+
+### Phase 4: Export Functionality (⏳ NOT STARTED)
+**Priority**: MEDIUM
+**Module Needed**: telegram_bot_exports.py
+
+**Commands to Implement**:
+1. `/export line [num]` - CSV export
+2. `/export swath [num]` - Swath CSV
+3. `/export all` - Full database
+4. `/export retrieval` - Outstanding items
+
+**Estimated Time**: 2-3 hours
+**Deliverable**: Data export capabilities
+
+### Phase 5: PDF Reports (⏳ NOT STARTED)
+**Priority**: LOW (Nice to have)
+**Module Needed**: telegram_bot_pdf.py (most complex)
+
+**Reports to Implement**:
+1. `/report daily` - Daily summary PDF
+2. `/report line [num]` - Line report PDF
+3. `/report swath [num]` - Swath report PDF
+4. `/report completion` - Full project PDF
+5. `/report retrieval` - Action plan PDF
+
+**Estimated Time**: 8-10 hours (most complex)
+**Deliverable**: Professional PDF reports
+
+### Phase 6: Polish & Enhancement (⏳ NOT STARTED)
+**Priority**: LOW
+**Features**:
+- Scheduled notifications (daily summaries)
+- Alert thresholds (notify when >50 outstanding)
+- Multi-language support
+- Voice command handling
+- Photo uploads for deployments
+- Location tracking integration
+
+**Estimated Time**: Variable (ongoing)
+
+---
+
+## Total Implementation Estimate
+
+| Phase | Priority | Time | Status |
+|-------|----------|------|--------|
+| Phase 1: Foundation | HIGH | 2h | 75% ✅ |
+| Phase 2: Core Commands | HIGH | 6h | 0% ⏳ |
+| Phase 3: Advanced Analysis | MEDIUM | 4h | 0% ⏳ |
+| Phase 4: Export Functionality | MEDIUM | 3h | 0% ⏳ |
+| Phase 5: PDF Reports | LOW | 10h | 0% ⏳ |
+| Phase 6: Polish | LOW | Variable | 0% ⏳ |
+| **TOTAL** | | **25h** | **12%** |
+
+**Minimum Viable Product (MVP)**: Phases 1 + 2 = 8 hours
+**Full Feature Set**: Phases 1-5 = 25 hours
+**Production Ready**: All Phases = 30+ hours
+
+---
+
+## File Structure
+
+```
+ANTAN3D/
+├── telegram_backup_service.py          (existing - needs update)
+├── telegram_bot_queries.py             (✅ COMPLETE - 400 lines)
+├── telegram_bot_formatting.py          (✅ COMPLETE - 450 lines)
+├── telegram_bot_charts.py              (✅ COMPLETE - 350 lines)
+├── telegram_bot_stats.py               (⏳ PENDING - est. 300 lines)
+├── telegram_bot_commands.py            (⏳ PENDING - est. 500 lines)
+├── telegram_bot_exports.py             (⏳ PENDING - est. 250 lines)
+├── telegram_bot_pdf.py                 (⏳ PENDING - est. 800 lines)
+├── .env                                (existing - add bot settings)
+├── .clinerules                         (THIS FILE)
+└── scripts/
+    └── backup/
+        └── setup_telegram_backup.sh    (existing - needs update)
+```
+
+**Total Lines of Code Estimate**: ~3,000 lines across all modules
+
+---
+
+## Database Schema Reference
+
+### Key Tables
+
+1. **coordinates** (58,641 rows)
+   - line, shotpoint, latitude, longitude, type, _id
+   - Primary shotpoint data
+
+2. **global_deployments** (23,722 rows)
+   - line, shotpoint, deployment_type, username, timestamp
+   - All deployments across project
+
+3. **swath_1 through swath_8** (8 tables)
+   - line, shotpoint, deployment_type, username, timestamp
+   - Per-swath deployment tracking
+
+4. **users**
+   - username, password_hash, created_at, updated_at
+   - User authentication
+
+5. **swath_lines** (cache)
+   - Cached line geometry for map performance
+
+### Deployment Types
+
+```python
+DEPLOYMENT_TYPES = [
+    "NODES DEPLOYED",
+    "NODES RETRIEVED",
+    "SM10 GEOPHONES DEPLOYED",
+    "SM10 GEOPHONES RETRIEVED",
+    "MARSH GEOPHONES DEPLOYED",
+    "MARSH GEOPHONES RETRIEVED",
+    "HYDROPHONES DEPLOYED",
+    "HYDROPHONES RETRIEVED",
+    "FORBIDDEN BUSH",
+    "OFFSETS"
+]
+```
+
+### Key Statistics (Current Data)
+
+- Total Coordinates: 58,641
+- Total Survey Lines: 123
+- Total Deployments: 23,722
+- Nodes: 13,207 deployed / 9,847 retrieved (3,360 outstanding)
+- Hydrophones: 557 deployed / 17 retrieved (540 outstanding)
+- Marsh Geophones: 38 deployed / 35 retrieved (3 outstanding)
+- SM10 Geophones: 6 deployed / 15 retrieved
+- Active Users: 1 (admin)
+
+---
+
+## Technical Considerations
+
+### Performance
+
+1. **Database Queries**:
+   - Use connection pooling (already configured: 10-50 connections)
+   - Add query caching for frequently accessed stats (5 minute TTL)
+   - Use indexes on line, shotpoint, deployment_type columns
+   - Limit result sets with pagination
+
+2. **Response Time**:
+   - Target: <2 seconds for simple commands
+   - Target: <5 seconds for complex reports
+   - Target: <15 seconds for PDF generation
+   - Use async processing for long operations
+
+3. **Memory Management**:
+   - Stream large exports (don't load all in memory)
+   - Clean up temporary files after sending
+   - Limit concurrent PDF generations
+
+### Security
+
+1. **Authorization**:
+   - Only authorized chat IDs can use bot
+   - Store allowed chat IDs in environment or database
+   - Reject commands from unknown users
+
+2. **Rate Limiting**:
+   - Max 10 commands per minute per user
+   - Prevent spam and abuse
+   - Protect database from overload
+
+3. **Data Protection**:
+   - Don't expose sensitive user passwords
+   - Sanitize SQL inputs (use parameterized queries)
+   - Validate all user inputs
+
+4. **Telegram Security**:
+   - Keep bot token secret
+   - Use HTTPS for all API calls
+   - Validate webhook signatures (if using webhooks)
+
+### Error Handling
+
+1. **Database Errors**:
+   - Catch connection failures
+   - Retry with exponential backoff
+   - Log errors for debugging
+   - Send friendly error messages to user
+
+2. **Telegram API Errors**:
+   - Handle rate limits (429 errors)
+   - Retry failed message sends
+   - Handle file size limits (50MB for Telegram)
+
+3. **User Errors**:
+   - Invalid line numbers
+   - Invalid swath numbers
+   - Malformed commands
+   - Provide helpful error messages
+
+### Scalability
+
+1. **Multiple Users**:
+   - Support multiple simultaneous users
+   - Separate cache per user (if personalized)
+   - Queue system for PDF generation
+
+2. **Growing Data**:
+   - Queries optimized for current 60k+ coordinates
+   - Will scale to 100k+ with proper indexes
+   - Consider pagination for very large result sets
+
+3. **Feature Growth**:
+   - Modular architecture allows easy feature addition
+   - Each module independent and testable
+   - Plugin system for future extensions
+
+---
+
+## Testing Strategy
+
+### Unit Tests (Recommended)
+
+1. **telegram_bot_queries.py**:
+   - Test each query with mock data
+   - Verify correct SQL syntax
+   - Test edge cases (no data, single record)
+
+2. **telegram_bot_formatting.py**:
+   - Test progress bar generation
+   - Test message formatting with various data
+   - Verify HTML escaping
+
+3. **telegram_bot_charts.py**:
+   - Test each chart type with sample data
+   - Verify image generation
+   - Test edge cases (empty data, single point)
+
+### Integration Tests
+
+1. **End-to-End Command Flow**:
+   - Send `/stats` → Verify response format
+   - Send `/line 5000` → Verify correct data
+   - Send `/backup` → Verify file received
+
+2. **Database Integration**:
+   - Test with actual PostgreSQL database
+   - Verify connection pooling works
+   - Test concurrent requests
+
+### Manual Testing Checklist
+
+- [ ] `/start` - Welcome message displays
+- [ ] `/help` - All commands listed
+- [ ] `/stats` - Correct statistics shown
+- [ ] `/today` - Today's data (may be 0)
+- [ ] `/line 5000` - Line details with progress
+- [ ] `/line 9999` - Invalid line error
+- [ ] `/swath 3` - Swath details
+- [ ] `/swaths` - All 8 swaths comparison
+- [ ] `/progress` - Progress by type
+- [ ] `/retrieval` - Outstanding items
+- [ ] `/users` - User statistics
+- [ ] `/backup` - Database backup file sent
+- [ ] `/export line 5000` - CSV file sent
+- [ ] `/report line 5000` - PDF file sent
+- [ ] Rate limiting works (>10 cmds/min blocked)
+- [ ] Unknown commands show error
+- [ ] Charts display correctly
+- [ ] Progress bars render properly
+- [ ] PDF formatting is professional
+
+---
+
+## Dependencies Installation
+
+```bash
+# Activate virtual environment
+source swathenv/bin/activate
+
+# Install required packages
+pip install python-dotenv requests psycopg2-binary
+
+# For charts and reports
+pip install matplotlib pillow pandas
+
+# For PDF generation
+pip install reportlab
+
+# Optional: For Excel exports
+pip install openpyxl xlsxwriter
+```
+
+---
+
+## Environment Variables
+
+Add to `.env`:
+
+```bash
+# Telegram Bot Configuration
+TELEGRAM_BOT_TOKEN=123456789:ABCdefGHIjklMNOpqrsTUVwxyz
+
+# Optional: Authorized users (comma-separated chat IDs)
+TELEGRAM_ALLOWED_CHATS=639513526,123456789
+
+# Optional: Rate limiting
+TELEGRAM_MAX_COMMANDS_PER_MINUTE=10
+
+# Optional: Cache settings
+STATS_CACHE_TTL=300  # 5 minutes in seconds
+
+# Optional: Notification schedule (if implementing Phase 6)
+TELEGRAM_DAILY_SUMMARY_TIME=18:00
+TELEGRAM_DAILY_SUMMARY_ENABLED=false
+```
+
+---
+
+## Next Immediate Steps
+
+### Step 1: Complete Phase 1 (1 hour)
+- [ ] Create telegram_bot_stats.py
+- [ ] Add statistics calculation methods
+- [ ] Add caching layer
+- [ ] Test with sample data
+
+### Step 2: Start Phase 2 - Core Commands (3 hours)
+- [ ] Create telegram_bot_commands.py
+- [ ] Implement command parser
+- [ ] Implement 7 basic command handlers
+- [ ] Add error handling
+
+### Step 3: Integrate into Main Service (2 hours)
+- [ ] Update telegram_backup_service.py
+- [ ] Add message polling/webhook
+- [ ] Route commands to handler
+- [ ] Test end-to-end flow
+
+### Step 4: Test MVP (1 hour)
+- [ ] Test all 7 basic commands
+- [ ] Fix bugs
+- [ ] Verify database queries work
+- [ ] Deploy to systemd service
+
+**Total to MVP**: ~7 hours remaining
+
+---
+
+## Success Criteria
+
+### MVP Success (Phase 1 + 2)
+- ✅ Bot responds to `/start` with welcome
+- ✅ Bot shows help with `/help`
+- ✅ Bot provides accurate statistics for `/stats`
+- ✅ Bot shows line details for any valid line number
+- ✅ Bot shows swath details for swaths 1-8
+- ✅ Bot compares all swaths with `/swaths`
+- ✅ Bot shows today's activity (even if 0)
+- ✅ Bot handles invalid commands gracefully
+- ✅ Response time < 3 seconds for all commands
+- ✅ Bot works from any authorized Telegram account
+
+### Full Success (All Phases)
+- ✅ All MVP criteria met
+- ✅ Export commands generate valid CSV files
+- ✅ PDF reports are professional quality
+- ✅ All charts render correctly in reports
+- ✅ Rate limiting prevents abuse
+- ✅ System handles 10+ concurrent users
+- ✅ Automated daily summaries work (optional)
+- ✅ No crashes or errors in production
+- ✅ Documentation is complete
+- ✅ Code is maintainable and well-commented
+
+---
+
+## Maintenance & Future Enhancements
+
+### Regular Maintenance
+- Monitor bot uptime
+- Check database query performance
+- Update statistics cache as data grows
+- Review and optimize slow queries
+- Keep dependencies updated
+
+### Future Feature Ideas
+1. **Voice Commands**: "What's the status of line 5000?"
+2. **Natural Language**: "Show me incomplete lines"
+3. **Predictive Analytics**: ML model for completion prediction
+4. **Weather Integration**: Correlate activity with weather
+5. **Equipment Tracking**: Serial numbers, maintenance
+6. **Photo Documentation**: Upload deployment photos
+7. **GPS Verification**: Verify deployment locations
+8. **Multi-Language**: Spanish, French support
+9. **Web Dashboard**: Complement to bot
+10. **Mobile App**: Native iOS/Android with bot integration
+
+---
+
+## References & Resources
+
+### Telegram Bot API
+- Documentation: https://core.telegram.org/bots/api
+- Python library: python-telegram-bot
+- Message formatting: HTML and Markdown support
+- File upload limits: 50MB per file
+
+### ReportLab (PDF)
+- Documentation: https://www.reportlab.com/docs/reportlab-userguide.pdf
+- PyPI: https://pypi.org/project/reportlab/
+- Examples: https://github.com/rst2pdf/reportlab
+
+### Matplotlib
+- Documentation: https://matplotlib.org/stable/contents.html
+- Gallery: https://matplotlib.org/stable/gallery/index.html
+- Colormaps: https://matplotlib.org/stable/tutorials/colors/colormaps.html
+
+### PostgreSQL
+- psycopg2 docs: https://www.psycopg.org/docs/
+- Connection pooling: ThreadedConnectionPool
+- Query optimization: EXPLAIN ANALYZE
+
+---
+
+## Project Context
+
+**User**: aerys (admin user)
+**Location**: /home/aerys/Documents/ANTAN3D
+**Python Environment**: swathenv (virtualenv)
+**Database**: swath_movers (PostgreSQL)
+**Current Services**:
+- swath-movers.service (Flask app)
+- ngrok.service (tunnel)
+- telegram-backup.service (backup bot)
+
+**Git Status**: On branch production
+**Deployment**: Home server, ready for production use
+
+---
+
+## IMPORTANT NOTES
+
+1. **This is a PRODUCTION system** - Test thoroughly before deploying
+2. **Data is REAL** - 23k+ deployments, don't corrupt
+3. **Users are FIELD WORKERS** - Keep UX simple and fast
+4. **Network may be SLOW** - Optimize response sizes
+5. **Bot will run 24/7** - Handle crashes gracefully
+6. **Multiple users will use it** - Consider concurrency
+
+---
+
+Last Updated: 2025-10-27
+Status: Phase 1 - 75% Complete
+Next Action: Create telegram_bot_stats.py

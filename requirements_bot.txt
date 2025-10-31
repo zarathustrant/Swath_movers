@@ -1,0 +1,19 @@
+# Telegram Bot Requirements
+# Install with: pip install -r requirements_bot.txt
+
+# Core dependencies (already installed)
+python-dotenv>=1.0.0
+requests>=2.31.0
+psycopg2-binary>=2.9.9
+
+# Chart generation
+matplotlib>=3.7.0
+pillow>=10.0.0
+
+# Optional: Excel exports (if needed later)
+# pandas>=2.0.0
+# openpyxl>=3.1.0
+# xlsxwriter>=3.1.0
+
+# Optional: PDF generation (Phase 5 - not yet implemented)
+# reportlab>=4.0.0

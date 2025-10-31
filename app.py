@@ -66,6 +66,10 @@ os.makedirs(SWATH_FOLDER, exist_ok=True)
 # Enable compression
 Compress(app)
 
+# Register post plot blueprint
+from postplot import postplot_bp
+app.register_blueprint(postplot_bp, url_prefix='/postplot')
+
 DEPLOYMENT_TYPES = [
     "NODES DEPLOYED", "SM10 GEOPHONES DEPLOYED", "MARSH GEOPHONES DEPLOYED", "HYDROPHONES DEPLOYED",
     "FORBIDDEN BUSH", "OFFSETS", "NODES RETRIEVED", "SM10 GEOPHONES RETRIEVED", "MARSH GEOPHONES RETRIEVED", "HYDROPHONES RETRIEVED"
