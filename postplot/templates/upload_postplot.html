@@ -324,7 +324,10 @@
             margin-top: 10px;
             box-shadow: inset 0 2px 4px rgba(101, 67, 33, 0.1);
             position: relative;
-            overflow: visible;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            padding-left: 15px;
         }
 
         .progress-fill {
@@ -336,14 +339,21 @@
             transition: width 0.4s ease;
             box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3);
             border-radius: 14px 0 0 14px;
-            display: flex;
-            align-items: center;
-            padding-left: 15px;
+            z-index: 1;
+            pointer-events: none;
+        }
+
+        .progress-fill[style*="width: 0"] {
+            display: none;
+        }
+
+        .progress-bar > span {
+            position: relative;
+            z-index: 2;
             color: #5d4037;
             font-size: 13px;
             font-weight: 700;
             white-space: nowrap;
-            overflow: visible;
         }
 
         .instructions {
@@ -682,9 +692,8 @@
                     <td style="color: #f50303; font-weight: bold;">{{ "{:,}".format(stat.pending) }}</td>
                     <td>
                         <div class="progress-bar">
-                            <div class="progress-fill" style="width: {{ stat.percentage }}%;">
-                                {{ "%.1f"|format(stat.percentage) }}%
-                            </div>
+                            <div class="progress-fill" style="width: {{ stat.percentage }}%;"></div>
+                            <span>{{ "%.1f"|format(stat.percentage) }}%</span>
                         </div>
                     </td>
                     <td>{{ stat.last_upload.strftime('%Y-%m-%d %H:%M') if stat.last_upload else 'Never' }}</td>

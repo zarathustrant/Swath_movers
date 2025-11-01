@@ -385,10 +385,111 @@ Let's get started! Try /stats to see your project overview.
 
     def cmd_backup(self, chat_id: int, args: List[str]) -> Dict:
         """Handle /backup command"""
-        return {
-            'type': 'text',
-            'content': "⏳ <b>Backup Triggered</b>\n\nCreating database backup...\n\nYou will receive the backup file shortly."
-        }
+        import subprocess
+        import gzip
+        import shutil
+        from pathlib import Path
+        from datetime import datetime
+        import os
+
+        try:
+            # Send initial message
+            self.send_message(chat_id, "⏳ <b>Backup Triggered</b>\n\nCreating database backup...")
+
+            # Get database credentials from environment
+            from dotenv import load_dotenv
+            env_path = Path(__file__).parent / ".env"
+            load_dotenv(env_path)
+
+            db_name = os.getenv("DB_NAME", "swath_movers")
+            db_user = os.getenv("DB_USER", "aerys")
+            db_password = os.getenv("DB_PASSWORD", "")
+            db_host = os.getenv("DB_HOST", "localhost")
+            db_port = os.getenv("DB_PORT", "5432")
+
+            # Create backup directory
+            backup_dir = Path(__file__).parent / "backups"
+            backup_dir.mkdir(exist_ok=True)
+
+            # Create backup
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            backup_file = backup_dir / f"{db_name}_backup_{timestamp}.sql"
+
+            logger.info(f"Creating backup: {backup_file.name}")
+
+            # Run pg_dump
+            env = os.environ.copy()
+            env['PGPASSWORD'] = db_password
+
+            cmd = [
+                'pg_dump',
+                '-h', db_host,
+                '-p', db_port,
+                '-U', db_user,
+                '-d', db_name,
+                '-f', str(backup_file)
+            ]
+
+            result = subprocess.run(cmd, env=env, capture_output=True, text=True)
+
+            if result.returncode != 0:
+                logger.error(f"pg_dump failed: {result.stderr}")
+                return {
+                    'type': 'text',
+                    'content': f"❌ <b>Backup Failed</b>\n\nError: {result.stderr[:200]}"
+                }
+
+            # Compress backup
+            backup_gz = Path(f"{backup_file}.gz")
+            with open(backup_file, 'rb') as f_in:
+                with gzip.open(backup_gz, 'wb') as f_out:
+                    shutil.copyfileobj(f_in, f_out)
+
+            # Remove uncompressed file
+            backup_file.unlink()
+
+            # Get file size
+            size_mb = backup_gz.stat().st_size / (1024 * 1024)
+            logger.info(f"Backup compressed: {size_mb:.2f} MB")
+
+            # Send file to Telegram
+            url = f"https://api.telegram.org/bot{self.bot_token}/sendDocument"
+
+            caption = f"""🗄️ <b>Database Backup</b>
+
+📅 Date: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+📦 Database: {db_name}
+💾 Size: {size_mb:.2f} MB
+
+✅ Backup completed successfully"""
+
+            with open(backup_gz, 'rb') as f:
+                files = {'document': f}
+                data = {
+                    'chat_id': chat_id,
+                    'caption': caption,
+                    'parse_mode': 'HTML'
+                }
+
+                response = requests.post(url, files=files, data=data, timeout=120)
+
+                if response.status_code == 200:
+                    logger.info(f"✓ Backup sent to chat {chat_id}")
+                    # Don't return anything - file is already sent
+                    return {'type': 'none'}
+                else:
+                    logger.error(f"Failed to send backup: {response.text}")
+                    return {
+                        'type': 'text',
+                        'content': f"❌ <b>Failed to send backup</b>\n\nFile created but couldn't send: {response.text[:200]}"
+                    }
+
+        except Exception as e:
+            logger.error(f"Backup command failed: {e}", exc_info=True)
+            return {
+                'type': 'text',
+                'content': f"❌ <b>Backup Failed</b>\n\nError: {str(e)}"
+            }
 
     def cmd_export(self, chat_id: int, args: List[str]) -> Dict:
         """Handle /export [type] [id] command"""

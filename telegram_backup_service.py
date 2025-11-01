@@ -70,11 +70,46 @@ class TelegramBackupService:
         # Backup settings
         self.retention_days = 7
 
-        # Chat IDs will be discovered from messages
-        self.chat_ids = set()
+        # Chat IDs will be discovered from messages and persisted
+        self.chat_ids_file = self.project_root / "telegram_chat_ids.txt"
+        self.chat_ids = self.load_chat_ids()
 
         logger.info("✓ Telegram Backup Service initialized")
-        logger.info("✓ Bot ready - waiting for messages to discover chat IDs")
+        if self.chat_ids:
+            logger.info(f"✓ Loaded {len(self.chat_ids)} saved chat ID(s)")
+        else:
+            logger.info("✓ Bot ready - will discover chat IDs from messages")
+
+    def load_chat_ids(self):
+        """Load chat IDs from persistent storage"""
+        try:
+            if self.chat_ids_file.exists():
+                with open(self.chat_ids_file, 'r') as f:
+                    chat_ids = set()
+                    for line in f:
+                        line = line.strip()
+                        if line and not line.startswith('#'):
+                            try:
+                                chat_ids.add(int(line))
+                            except ValueError:
+                                logger.warning(f"Invalid chat ID in file: {line}")
+                    return chat_ids
+            return set()
+        except Exception as e:
+            logger.warning(f"Could not load chat IDs: {e}")
+            return set()
+
+    def save_chat_ids(self):
+        """Save chat IDs to persistent storage"""
+        try:
+            with open(self.chat_ids_file, 'w') as f:
+                f.write("# Telegram Chat IDs for backup notifications\n")
+                f.write(f"# Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                for chat_id in sorted(self.chat_ids):
+                    f.write(f"{chat_id}\n")
+            logger.info(f"✓ Saved {len(self.chat_ids)} chat ID(s)")
+        except Exception as e:
+            logger.error(f"Failed to save chat IDs: {e}")
 
     def create_backup(self):
         """Create PostgreSQL database backup"""
@@ -181,29 +216,52 @@ class TelegramBackupService:
             if response.status_code == 200:
                 data = response.json()
                 if data.get('ok') and data.get('result'):
+                    initial_count = len(self.chat_ids)
+
                     for update in data['result']:
                         if 'message' in update:
                             chat_id = update['message']['chat']['id']
                             chat_name = update['message']['chat'].get('first_name', 'Unknown')
-                            self.chat_ids.add(chat_id)
-                            logger.info(f"✓ Found chat ID: {chat_id} ({chat_name})")
+
+                            if chat_id not in self.chat_ids:
+                                self.chat_ids.add(chat_id)
+                                logger.info(f"✓ New chat ID discovered: {chat_id} ({chat_name})")
+
+                    # Save if new chat IDs were found
+                    if len(self.chat_ids) > initial_count:
+                        self.save_chat_ids()
+                        logger.info(f"✓ Total chat IDs: {len(self.chat_ids)}")
 
                     if self.chat_ids:
-                        logger.info(f"✓ Total chat IDs discovered: {len(self.chat_ids)}")
                         return True
                     else:
                         logger.warning("⚠️  No messages found - users need to start the bot first")
                         return False
                 else:
-                    logger.error(f"❌ API response error: {data}")
-                    return False
+                    # If we have saved chat IDs, use those
+                    if self.chat_ids:
+                        logger.info(f"✓ Using {len(self.chat_ids)} saved chat ID(s)")
+                        return True
+                    else:
+                        logger.error(f"❌ No saved chat IDs and API returned: {data}")
+                        return False
             else:
-                logger.error(f"❌ Failed to get updates: {response.status_code}")
-                return False
+                # If we have saved chat IDs, use those even if API fails
+                if self.chat_ids:
+                    logger.warning(f"⚠️  API failed but using {len(self.chat_ids)} saved chat ID(s)")
+                    return True
+                else:
+                    logger.error(f"❌ Failed to get updates: {response.status_code}")
+                    return False
 
         except Exception as e:
-            logger.error(f"❌ Failed to get chat IDs: {e}")
-            return False
+            # If we have saved chat IDs, use those even if API fails
+            if self.chat_ids:
+                logger.warning(f"⚠️  API error but using {len(self.chat_ids)} saved chat ID(s)")
+                return True
+            else:
+                logger.error(f"❌ Failed to get chat IDs: {e}")
+                return False
 
     def send_to_telegram(self, backup_file, chat_id):
         """Send backup file to Telegram"""
